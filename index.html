@@ -2063,9 +2063,14 @@ async function renderAttendancePage(main){
   `;
   const empSel = document.getElementById('at-emp');
   const monthSel = document.getElementById('at-month');
+  const dateInput = document.getElementById('at-date');
   monthSel.value = currentDefaultMonth();
-  document.getElementById('at-date').value = new Date().toISOString().slice(0,10);
+  dateInput.value = new Date().toISOString().slice(0,10);
   empSel.onchange = draw; monthSel.onchange = draw;
+  dateInput.onchange = ()=>{
+    const m = monthOfDateStr(dateInput.value);
+    if(m && m!==monthSel.value){ monthSel.value = m; draw(); }
+  };
 
   const recalc = ()=>{
     const h = attendanceHoursDiff(document.getElementById('at-in').value, document.getElementById('at-out').value);
@@ -2096,12 +2101,14 @@ async function renderAttendancePage(main){
       hours = attendanceHoursDiff(inV, outV);
       if(hours<=0){ alert(t('outBeforeIn')); return; }
     }
-    const days = await loadAttendance(empSel.value, monthSel.value);
+    const month = monthOfDateStr(date) || monthSel.value;
+    const days = await loadAttendance(empSel.value, month);
     const exists = days.some(d=>d.date===date);
     const updated = days.filter(d=>d.date!==date);
     updated.push({date, status, in:inV, out:outV, hours});
-    await saveAttendance(empSel.value, monthSel.value, updated);
-    await syncAttendanceToMonthlyData(empSel.value, monthSel.value);
+    if(month!==monthSel.value) monthSel.value = month;
+    await saveAttendance(empSel.value, month, updated);
+    await syncAttendanceToMonthlyData(empSel.value, month);
     toast(exists ? t('attendanceExistsOverwrite') : t('attendanceAdded'));
     draw();
   };
