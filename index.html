@@ -417,6 +417,7 @@ const I18N = {
     importAttendanceBtn:'استيراد وحفظ', importedAttendanceDays:'تم استيراد وحفظ', importedAttendanceNoMatch:'مقدرناش نطابق أي صف من الملف مع موظفين أو تواريخ صحيحة',
     dailyTargetHint:'ساعات الحضور المسجلة لهذا اليوم', noAttendanceForDate:'مفيش حضور مسجل لهذا اليوم',
     dailyMismatchWarning:'تنبيه: مجموع ساعات التوزيع لهذا اليوم مختلف عن ساعات الحضور الفعلية المسجلة',
+    showResigned:'إظهار المستقيلين',
   },
   en: {
     appTitle:'Engineering Utilization Management System',
@@ -546,6 +547,7 @@ const I18N = {
     importAttendanceBtn:'Import & Save', importedAttendanceDays:'Imported and saved', importedAttendanceNoMatch:'Could not match any row from the file with valid employees or dates',
     dailyTargetHint:'Recorded attendance hours for this day', noAttendanceForDate:'No attendance recorded for this day',
     dailyMismatchWarning:'Warning: the total distributed hours for this day differ from the actual recorded attendance hours',
+    showResigned:'Show Resigned',
   }
 };
 function t(key){ return (I18N[state.lang] && I18N[state.lang][key]) || key; }
@@ -1365,23 +1367,26 @@ async function renderAdminDashboard(main){
     <div class="filters-row">
       <select id="f-month">${MONTHS.map(([v])=>`<option value="${v}">${monthLabel(v)}</option>`).join('')}</select>
       <select id="f-dept2"><option value="">${t('allDepts')}</option>${DEPARTMENTS.map(d=>`<option value="${d.id}">${deptName(d.id)}</option>`).join('')}</select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);"><input type="checkbox" id="f-show-resigned"/> ${t('showResigned')}</label>
     </div>
     <div id="admin-dash-body"><div class="empty-state">${t('loadingData')}</div></div>
   `;
   const monthSel = document.getElementById('f-month');
   const deptSel = document.getElementById('f-dept2');
+  const showResignedChk = document.getElementById('f-show-resigned');
   const defaultMonth = currentDefaultMonth();
   monthSel.value = defaultMonth;
-  monthSel.onchange = draw; deptSel.onchange = draw;
+  monthSel.onchange = draw; deptSel.onchange = draw; showResignedChk.onchange = draw;
   draw();
 
   async function draw(){
     const month = monthSel.value;
     const deptFilter = deptSel.value;
+    const showResigned = showResignedChk.checked;
     const body = document.getElementById('admin-dash-body');
     body.innerHTML = `<div class="empty-state">${t('loading')}</div>`;
     const allEntries = await loadAllTimesheetsForMonth(month);
-    const visibleEmps = state.employees.filter(e=>(!deptFilter || e.department===deptFilter) && employeeActiveInMonth(e, month));
+    const visibleEmps = state.employees.filter(e=>(!deptFilter || e.department===deptFilter) && employeeActiveInMonth(e, month) && (showResigned || employeeCountsInMonth(e, month)));
     const [notesMap, targetsMap, approvedMap] = await Promise.all([
       loadAllNotesForMonth(visibleEmps.map(e=>e.id), month),
       loadAllTargetsForMonth(visibleEmps.map(e=>e.id), month),
@@ -1672,6 +1677,10 @@ async function renderCapacityDashboard(main){
           <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px;">${t('capFilterProject')}</label>
           <select id="cap-prj"><option value="">${t('capAll')}</option>${state.projects.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select>
         </div>
+        <div>
+          <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px;">&nbsp;</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);height:34px;"><input type="checkbox" id="cap-show-resigned"/> ${t('showResigned')}</label>
+        </div>
       </div>
     </div>
     <div id="cap-body"><div class="empty-state">${t('loadingData')}</div></div>
@@ -1681,10 +1690,11 @@ async function renderCapacityDashboard(main){
   const fromSel = document.getElementById('cap-from');
   const toSel = document.getElementById('cap-to');
   const prjSel = document.getElementById('cap-prj');
+  const showResignedChk = document.getElementById('cap-show-resigned');
   const defMonth = currentDefaultMonth();
   fromSel.value = MONTHS[0][0];
   toSel.value = defMonth;
-  [empSel,deptSel,fromSel,toSel,prjSel].forEach(s=>s.onchange=draw);
+  [empSel,deptSel,fromSel,toSel,prjSel,showResignedChk].forEach(s=>s.onchange=draw);
   draw();
 
   async function draw(){
@@ -1701,11 +1711,13 @@ async function renderCapacityDashboard(main){
     const empFilter = empSel.value;
     const deptFilter = deptSel.value;
     const prjFilter = prjSel.value;
+    const showResigned = showResignedChk.checked;
     const lastMonthInRange = monthsRange[monthsRange.length-1];
     const employees = state.employees.filter(e=>
       (!empFilter || e.id===empFilter)
       && (!deptFilter || e.department===deptFilter)
-      && employeeActiveInMonth(e, lastMonthInRange));
+      && employeeActiveInMonth(e, lastMonthInRange)
+      && (showResigned || employeeCountsInMonth(e, lastMonthInRange)));
     const empIds = employees.map(e=>e.id);
 
     // aggregate target/available/effective/training/idle per employee across the month range
@@ -2597,7 +2609,7 @@ async function renderMyTimesheet(main){
   async function updateDateHint(){
     const date = document.getElementById('e-date').value;
     const hintEl = document.getElementById('e-date-hint');
-    if(!date){ hintEl.textContent = ''; return; }
+    if(!date || emp.status!=='active_fulltime'){ hintEl.textContent = ''; return; }
     const month = monthOfDateStr(date) || monthSel.value;
     const days = await loadAttendance(emp.id, month);
     const rec = days.find(d=>d.date===date);
@@ -2629,7 +2641,7 @@ async function renderMyTimesheet(main){
     entries.push({id:uid('e'), date, type, projectId, hours, location:loc, approved:false, approvedBy:null, approvedAt:null});
     await saveTimesheet(emp.id, monthSel.value, entries);
     const days = await loadAttendance(emp.id, monthSel.value);
-    const rec = days.find(d=>d.date===date);
+    const rec = emp.status==='active_fulltime' ? days.find(d=>d.date===date) : null;
     if(rec){
       const dayTotal = entries.filter(e=>e.date===date).reduce((a,e)=>a+Number(e.hours||0),0);
       if(Math.abs(dayTotal - rec.hours) > 0.01){
