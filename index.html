@@ -223,6 +223,13 @@ const ENTRY_TYPES = {
   free:{label_ar:'فري تايم', label_en:'Free Time', color:'#7C93A8'},
   admin:{label_ar:'عمل إداري', label_en:'Administrative Work', color:'#9B6FCF'},
 };
+const ATTENDANCE_STATUSES = {
+  present:{label_ar:'حضور', label_en:'Present', color:'#2FA36B'},
+  annual:{label_ar:'إجازة سنوية', label_en:'Annual Leave', color:'#2F7FD4'},
+  unpaid:{label_ar:'إجازة بالخصم', label_en:'Unpaid Leave', color:'#D65C73'},
+  sick:{label_ar:'إجازة مرضية', label_en:'Sick Leave', color:'#C98A2E'},
+  holiday:{label_ar:'إجازة رسمية', label_en:'Official Holiday', color:'#9B6FCF'},
+};
 const DEFAULT_TARGET_FULLTIME = 198;
 const EMP_STATUSES = [
   {id:'standby',         label_ar:'استعداد (Standby)',   label_en:'Standby',            color:'#C98A2E'},
@@ -418,6 +425,8 @@ const I18N = {
     dailyTargetHint:'ساعات الحضور المسجلة لهذا اليوم', noAttendanceForDate:'مفيش حضور مسجل لهذا اليوم',
     dailyMismatchWarning:'تنبيه: مجموع ساعات التوزيع لهذا اليوم مختلف عن ساعات الحضور الفعلية المسجلة',
     showResigned:'إظهار المستقيلين',
+    attStatus:'حالة اليوم',
+    availableToDistribute:'المتاح للتوزيع',
   },
   en: {
     appTitle:'Engineering Utilization Management System',
@@ -548,6 +557,8 @@ const I18N = {
     dailyTargetHint:'Recorded attendance hours for this day', noAttendanceForDate:'No attendance recorded for this day',
     dailyMismatchWarning:'Warning: the total distributed hours for this day differ from the actual recorded attendance hours',
     showResigned:'Show Resigned',
+    attStatus:'Day Status',
+    availableToDistribute:'Available to Distribute',
   }
 };
 function t(key){ return (I18N[state.lang] && I18N[state.lang][key]) || key; }
@@ -695,6 +706,23 @@ function monthOfDateStr(dateStr){
   const dt = new Date(y, m-1, d);
   for(const [v] of MONTHS){ if(dateInFiscalRange(dt, v)) return v; }
   return null;
+}
+function attendanceStatusLabel(status){
+  const s = ATTENDANCE_STATUSES[status] || ATTENDANCE_STATUSES.present;
+  return state.lang==='en' ? s.label_en : s.label_ar;
+}
+// Recomputes Approved Hours / Annual / Unpaid / Holiday for an employee+month from their
+// recorded attendance days, and saves them so the "Details by Employee" tables stay in sync.
+// Sick-leave days are counted together with Unpaid, since there's no separate Sick column.
+async function syncAttendanceToMonthlyData(empId, month){
+  const days = await loadAttendance(empId, month);
+  const statusOf = d => d.status || 'present';
+  const approvedHours = days.filter(d=>statusOf(d)==='present').reduce((a,d)=>a+Number(d.hours||0),0);
+  const annual = days.filter(d=>statusOf(d)==='annual').length;
+  const unpaid = days.filter(d=>statusOf(d)==='unpaid' || statusOf(d)==='sick').length;
+  const holiday = days.filter(d=>statusOf(d)==='holiday').length;
+  await saveApprovedHours(empId, month, approvedHours);
+  await saveNote(empId, month, {annual, unpaid, holiday});
 }
 
 async function loadAllTimesheetsForMonth(month){
@@ -2006,12 +2034,17 @@ async function renderAttendancePage(main){
       <div class="panel-title">${t('addAttendanceEntry')}</div>
       <div class="row2">
         <div class="field"><label>${t('date')}</label><input type="date" id="at-date"/></div>
+        <div class="field"><label>${t('attStatus')}</label>
+          <select id="at-status">
+            ${Object.keys(ATTENDANCE_STATUSES).map(s=>`<option value="${s}">${state.lang==='en'?ATTENDANCE_STATUSES[s].label_en:ATTENDANCE_STATUSES[s].label_ar}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="row2" id="at-inout-wrap">
         <div class="field"><label>${t('thIn')}</label><input type="time" id="at-in" value="08:00"/></div>
-      </div>
-      <div class="row2">
         <div class="field"><label>${t('thOut')}</label><input type="time" id="at-out" value="17:00"/></div>
-        <div class="field"><label>${t('thActualHours')}</label><input type="text" id="at-calc" class="mono" disabled/></div>
       </div>
+      <div class="field" id="at-calc-wrap"><label>${t('thActualHours')}</label><input type="text" id="at-calc" class="mono" disabled/></div>
       <button class="btn btn-solid" id="at-add">${t('addBtn')}</button>
     </div>
     <div class="panel">
@@ -2042,18 +2075,33 @@ async function renderAttendancePage(main){
   document.getElementById('at-out').onchange = recalc;
   recalc();
 
+  const statusSel = document.getElementById('at-status');
+  const toggleInOut = ()=>{
+    const isPresent = statusSel.value==='present';
+    document.getElementById('at-inout-wrap').style.display = isPresent ? '' : 'none';
+    document.getElementById('at-calc-wrap').style.display = isPresent ? '' : 'none';
+  };
+  statusSel.onchange = toggleInOut;
+  toggleInOut();
+
   document.getElementById('at-add').onclick = async ()=>{
     const date = document.getElementById('at-date').value;
-    const inV = document.getElementById('at-in').value;
-    const outV = document.getElementById('at-out').value;
-    if(!date || !inV || !outV){ alert(t('inOutRequired')); return; }
-    const hours = attendanceHoursDiff(inV, outV);
-    if(hours<=0){ alert(t('outBeforeIn')); return; }
+    const status = statusSel.value;
+    if(!date){ alert(t('inOutRequired')); return; }
+    let inV = '', outV = '', hours = 0;
+    if(status==='present'){
+      inV = document.getElementById('at-in').value;
+      outV = document.getElementById('at-out').value;
+      if(!inV || !outV){ alert(t('inOutRequired')); return; }
+      hours = attendanceHoursDiff(inV, outV);
+      if(hours<=0){ alert(t('outBeforeIn')); return; }
+    }
     const days = await loadAttendance(empSel.value, monthSel.value);
     const exists = days.some(d=>d.date===date);
     const updated = days.filter(d=>d.date!==date);
-    updated.push({date, in:inV, out:outV, hours});
+    updated.push({date, status, in:inV, out:outV, hours});
     await saveAttendance(empSel.value, monthSel.value, updated);
+    await syncAttendanceToMonthlyData(empSel.value, monthSel.value);
     toast(exists ? t('attendanceExistsOverwrite') : t('attendanceAdded'));
     draw();
   };
@@ -2076,11 +2124,12 @@ async function renderAttendancePage(main){
       }
       let totalDays = 0;
       for(const empId of empIds){
-        const newDays = byEmp[empId];
+        const newDays = byEmp[empId].map(d=>({...d, status:'present'}));
         const existing = await loadAttendance(empId, monthSel.value);
         const newDates = new Set(newDays.map(d=>d.date));
         const merged = existing.filter(d=>!newDates.has(d.date)).concat(newDays);
         await saveAttendance(empId, monthSel.value, merged);
+        await syncAttendanceToMonthlyData(empId, monthSel.value);
         totalDays += newDays.length;
       }
       resultBox.innerHTML = `<span class="badge" style="background:#2F7FD422;color:#2F7FD4;">${t('importedAttendanceDays')} ${totalDays} (${empIds.length})</span>`;
@@ -2096,20 +2145,25 @@ async function renderAttendancePage(main){
     days.sort((a,b)=> a.date<b.date?-1:1);
     const tbl = document.getElementById('at-table');
     tbl.innerHTML = `
-      <tr><th>${t('thDate')}</th><th>${t('thIn')}</th><th>${t('thOut')}</th><th>${t('thActualHours')}</th><th></th></tr>
-      ${days.map(d=>`
+      <tr><th>${t('thDate')}</th><th>${t('attStatus')}</th><th>${t('thIn')}</th><th>${t('thOut')}</th><th>${t('thActualHours')}</th><th></th></tr>
+      ${days.map(d=>{
+        const status = d.status || 'present';
+        const info = ATTENDANCE_STATUSES[status] || ATTENDANCE_STATUSES.present;
+        return `
         <tr>
           <td class="mono">${d.date}</td>
-          <td class="mono">${d.in}</td>
-          <td class="mono">${d.out}</td>
-          <td class="mono">${fmt(d.hours)}</td>
+          <td><span style="color:${info.color}">${attendanceStatusLabel(status)}</span></td>
+          <td class="mono">${d.in || '—'}</td>
+          <td class="mono">${d.out || '—'}</td>
+          <td class="mono">${fmt(d.hours||0)}</td>
           <td><button class="icon-btn" data-date="${d.date}" style="color:var(--rose)">${t('del')}</button></td>
-        </tr>`).join('') || `<tr><td colspan="5"><div class="empty-state">${t('noAttendanceYet')}</div></td></tr>`}
+        </tr>`;}).join('') || `<tr><td colspan="6"><div class="empty-state">${t('noAttendanceYet')}</div></td></tr>`}
     `;
     tbl.querySelectorAll('.icon-btn').forEach(b=>{
       b.onclick = async ()=>{
         const updated = days.filter(d=>d.date!==b.dataset.date);
         await saveAttendance(empSel.value, monthSel.value, updated);
+        await syncAttendanceToMonthlyData(empSel.value, monthSel.value);
         draw();
       };
     });
@@ -2614,9 +2668,16 @@ async function renderMyTimesheet(main){
     const days = await loadAttendance(emp.id, month);
     const rec = days.find(d=>d.date===date);
     if(rec){
+      const status = rec.status || 'present';
       const entries = await loadTimesheet(emp.id, month);
       const already = entries.filter(e=>e.date===date).reduce((a,e)=>a+Number(e.hours||0),0);
-      hintEl.innerHTML = `${t('dailyTargetHint')}: <b class="mono">${fmt(rec.hours)}</b> — ${t('total')}: <span class="mono">${fmt(already)}</span>`;
+      if(status!=='present'){
+        hintEl.innerHTML = `<span style="color:${(ATTENDANCE_STATUSES[status]||{}).color||'inherit'}">${attendanceStatusLabel(status)}</span> — ${t('availableToDistribute')}: <b class="mono">0.0</b>`;
+      } else {
+        const remaining = Math.round((rec.hours - already)*100)/100;
+        const remColor = remaining>0.01 ? 'var(--amber)' : (remaining<-0.01 ? 'var(--rose)' : 'var(--green)');
+        hintEl.innerHTML = `${t('dailyTargetHint')}: <b class="mono">${fmt(rec.hours)}</b> — ${t('total')}: <span class="mono">${fmt(already)}</span> — ${t('availableToDistribute')}: <b class="mono" style="color:${remColor}">${fmt(remaining)}</b>`;
+      }
     } else {
       hintEl.textContent = t('noAttendanceForDate');
     }
@@ -2643,9 +2704,13 @@ async function renderMyTimesheet(main){
     const days = await loadAttendance(emp.id, monthSel.value);
     const rec = emp.status==='active_fulltime' ? days.find(d=>d.date===date) : null;
     if(rec){
+      const status = rec.status || 'present';
       const dayTotal = entries.filter(e=>e.date===date).reduce((a,e)=>a+Number(e.hours||0),0);
       if(Math.abs(dayTotal - rec.hours) > 0.01){
-        toast(`${t('dailyMismatchWarning')} (${fmt(dayTotal)} / ${fmt(rec.hours)})`);
+        const msg = status!=='present'
+          ? `${attendanceStatusLabel(status)} — ${t('dailyMismatchWarning')} (${fmt(dayTotal)} / 0.0)`
+          : `${t('dailyMismatchWarning')} (${fmt(dayTotal)} / ${fmt(rec.hours)})`;
+        toast(msg);
         draw(); updateDateHint();
         return;
       }
