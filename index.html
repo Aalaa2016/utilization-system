@@ -301,7 +301,7 @@ const I18N = {
     loginErrResigned:'هذا الحساب غير نشط (موظف مستقيل)',
     logout:'خروج',
     changePassword:'تغيير كلمة المرور',
-    navDashboard:'لوحة التحكم', navEmployees:'الموظفين', navProjects:'المشروعات', navTimesheets:'كل التايم شيتس', navMonthlyData:'بيانات الشهر المعتمدة',
+    navDashboard:'لوحة التحكم', navEmployees:'الموظفين', navProjects:'المشروعات', navTimesheets:'كل التايم شيتس', navMonthlyData:'بيانات الشهر المعتمدة', navAttendance:'الحضور والانصراف',
     navMyTimesheet:'تايم شيت اليوم/الشهر', navMyDashboard:'الطاقة الاستيعابية بتاعتي',
     navTeam:'فريقي', navGmApprovals:'اعتماد المدير العام', navCapacity:'الطاقة الإنتاجية والاستغلال',
     dailyTasksBtn:'📋 المهام اليومية', dailyTasksTitle:'اعتماد المهام اليومية —', approveAllBtn:'اعتماد الكل',
@@ -406,6 +406,17 @@ const I18N = {
     parseSummary:'تم استخراج بيانات', parseNoMatch:'مقدرناش نطابق أي كود موظف من الملف مع موظفين النظام',
     saveAll:'حفظ الكل', savedAll:'تم حفظ بيانات الشهر لكل الموظفين',
     rowSaved:'تم الحفظ',
+    attendanceTitle:'الحضور والانصراف', attendanceSub:'تسجيل وقت الدخول والخروج اليومي لكل موظف، لمقارنته بتوزيع الساعات في التايم شيت',
+    employee:'الموظف',
+    addAttendanceEntry:'إضافة يوم حضور', thIn:'وقت الدخول', thOut:'وقت الخروج', thActualHours:'إجمالي الساعات',
+    inOutRequired:'من فضلك اختر التاريخ ووقت الدخول والخروج', outBeforeIn:'وقت الخروج لازم يكون بعد وقت الدخول',
+    attendanceAdded:'تم حفظ يوم الحضور', attendanceExistsOverwrite:'فيه يوم حضور مسجل بنفس التاريخ، هيتم استبداله',
+    attendanceEntriesTitle:'أيام الحضور المسجلة', noAttendanceYet:'لسه مفيش أيام حضور مسجلة للموظف ده في الشهر ده',
+    bulkImportAttendanceTitle:'استيراد جماعي (ملف إكسل زي كشف الحضور)',
+    bulkImportAttendanceHint:'ارفع نفس ملف الحضور (بأعمدة الاسم/الكود، التاريخ، وقت الدخول، وقت الخروج) وهيتم تسجيل يوم حضور بالتفصيل لكل موظف وكل تاريخ تلقائيًا.',
+    importAttendanceBtn:'استيراد وحفظ', importedAttendanceDays:'تم استيراد وحفظ', importedAttendanceNoMatch:'مقدرناش نطابق أي صف من الملف مع موظفين أو تواريخ صحيحة',
+    dailyTargetHint:'ساعات الحضور المسجلة لهذا اليوم', noAttendanceForDate:'مفيش حضور مسجل لهذا اليوم',
+    dailyMismatchWarning:'تنبيه: مجموع ساعات التوزيع لهذا اليوم مختلف عن ساعات الحضور الفعلية المسجلة',
   },
   en: {
     appTitle:'Engineering Utilization Management System',
@@ -419,7 +430,7 @@ const I18N = {
     loginErrResigned:'This account is inactive (resigned employee)',
     logout:'Logout',
     changePassword:'Change Password',
-    navDashboard:'Dashboard', navEmployees:'Employees', navProjects:'Projects', navTimesheets:'All Timesheets', navMonthlyData:'Monthly Approved Data',
+    navDashboard:'Dashboard', navEmployees:'Employees', navProjects:'Projects', navTimesheets:'All Timesheets', navMonthlyData:'Monthly Approved Data', navAttendance:'Attendance',
     navMyTimesheet:'Daily/Monthly Timesheet', navMyDashboard:'My Utilization',
     navTeam:'My Team', navGmApprovals:'GM Approvals', navCapacity:'Utilization & Capacity',
     dailyTasksBtn:'📋 Daily Tasks', dailyTasksTitle:'Approve Daily Tasks —', approveAllBtn:'Approve All',
@@ -524,6 +535,17 @@ const I18N = {
     parseSummary:'Data extracted for', parseNoMatch:'Could not match any employee code from the file with system employees',
     saveAll:'Save All', savedAll:'Monthly data saved for all employees',
     rowSaved:'Saved',
+    attendanceTitle:'Attendance', attendanceSub:'Record daily check-in/check-out times per employee, to compare against their Timesheet hour distribution',
+    employee:'Employee',
+    addAttendanceEntry:'Add Attendance Day', thIn:'Check-in', thOut:'Check-out', thActualHours:'Actual Hours',
+    inOutRequired:'Please choose the date, check-in and check-out time', outBeforeIn:'Check-out time must be after check-in time',
+    attendanceAdded:'Attendance day saved', attendanceExistsOverwrite:'An attendance record already exists for this date and will be replaced',
+    attendanceEntriesTitle:'Recorded Attendance Days', noAttendanceYet:'No attendance days recorded yet for this employee this month',
+    bulkImportAttendanceTitle:'Bulk Import (same Excel attendance sheet)',
+    bulkImportAttendanceHint:'Upload the same attendance file (with name/code, date, check-in, check-out columns) and a detailed attendance day will be saved automatically for every employee and date.',
+    importAttendanceBtn:'Import & Save', importedAttendanceDays:'Imported and saved', importedAttendanceNoMatch:'Could not match any row from the file with valid employees or dates',
+    dailyTargetHint:'Recorded attendance hours for this day', noAttendanceForDate:'No attendance recorded for this day',
+    dailyMismatchWarning:'Warning: the total distributed hours for this day differ from the actual recorded attendance hours',
   }
 };
 function t(key){ return (I18N[state.lang] && I18N[state.lang][key]) || key; }
@@ -652,6 +674,26 @@ async function resetDemoData(){
 function tsKey(empId, month){ return `ts:${empId}:${month}`; }
 async function loadTimesheet(empId, month){ return await loadJSON(tsKey(empId,month), true, []); }
 async function saveTimesheet(empId, month, entries){ await saveJSON(tsKey(empId,month), true, entries); }
+
+/* ============================= ATTENDANCE (IN/OUT per day) ============================= */
+function attKey(empId, month){ return `att:${empId}:${month}`; }
+async function loadAttendance(empId, month){ return await loadJSON(attKey(empId,month), true, []); }
+async function saveAttendance(empId, month, days){ await saveJSON(attKey(empId,month), true, days); }
+function attendanceHoursDiff(inStr, outStr){
+  if(!inStr || !outStr) return 0;
+  const [ih,im] = inStr.split(':').map(Number);
+  const [oh,om] = outStr.split(':').map(Number);
+  if(!isFinite(ih)||!isFinite(im)||!isFinite(oh)||!isFinite(om)) return 0;
+  const diff = ((oh*60+om) - (ih*60+im)) / 60;
+  return diff>0 && diff<24 ? Math.round(diff*100)/100 : 0;
+}
+function monthOfDateStr(dateStr){
+  const [y,m,d] = dateStr.split('-').map(Number);
+  if(!y||!m||!d) return null;
+  const dt = new Date(y, m-1, d);
+  for(const [v] of MONTHS){ if(dateInFiscalRange(dt, v)) return v; }
+  return null;
+}
 
 async function loadAllTimesheetsForMonth(month){
   // returns map empId -> entries[]
@@ -900,6 +942,7 @@ function renderShell(app){
     ['dashboard',t('navDashboard')],
     ['capacity',t('navCapacity')],
     ['monthly-data',t('navMonthlyData')],
+    ['attendance',t('navAttendance')],
     ['gm-approvals',t('navGmApprovals')],
     ['employees',t('navEmployees')],
     ['projects',t('navProjects')],
@@ -954,6 +997,7 @@ function renderShell(app){
     if(state.route==='dashboard') renderAdminDashboard(main);
     else if(state.route==='capacity') renderCapacityDashboard(main);
     else if(state.route==='monthly-data') renderMonthlyDataPage(main);
+    else if(state.route==='attendance') renderAttendancePage(main);
     else if(state.route==='gm-approvals') renderGmApprovalsPage(main);
     else if(state.route==='employees') renderEmployeesPage(main);
     else if(state.route==='projects') renderProjectsPage(main);
@@ -1876,7 +1920,191 @@ async function renderCapacityDashboard(main){
   }
 }
 
-/* ============================= ADMIN: MONTHLY APPROVED DATA ============================= */
+/* ============================= ADMIN: ATTENDANCE (IN/OUT per day) ============================= */
+function parseAttendanceDetailRows(rows, monthValue){
+  // Same flexible column matching as parseAttendanceRows, but keeps per-day IN/OUT detail
+  // instead of a monthly total. Returns { [employeeId]: [{date, in, out, hours}, ...] }
+  if(!rows || !rows.length) return {};
+  const sampleKeys = Object.keys(rows[0]);
+  const findKey = (patterns)=> sampleKeys.find(k=> patterns.some(p=> k.toString().toLowerCase().includes(p)));
+  const codeKey = findKey(['code','كود']);
+  const nameKey = findKey(['name','اسم']);
+  const dateKey = findKey(['date','تاريخ']);
+  const inKey = findKey(['check in','checkin','in time','time in','حضور']);
+  const outKey = findKey(['check out','checkout','out time','time out','انصراف']);
+  if(!dateKey || !inKey || !outKey) return {};
+
+  const empByCode = {}; state.employees.forEach(e=>{ if(e.code) empByCode[String(e.code).trim().toLowerCase()] = e; });
+  const empByName = {}; state.employees.forEach(e=>{ empByName[String(e.name).trim().toLowerCase()] = e; });
+  const resolveEmp = (row)=>{
+    if(codeKey && row[codeKey]!==undefined && row[codeKey]!=='') {
+      const emp = empByCode[String(row[codeKey]).trim().toLowerCase()];
+      if(emp) return emp;
+    }
+    if(nameKey && row[nameKey]){
+      const emp = empByName[String(row[nameKey]).trim().toLowerCase()];
+      if(emp) return emp;
+    }
+    return null;
+  };
+  const toDateObj = (v)=>{
+    if(v instanceof Date) return v;
+    if(typeof v==='number') return new Date(Math.round((v-25569)*86400*1000));
+    const d = new Date(v); return isNaN(d) ? null : d;
+  };
+  const toTimeObj = (v)=>{
+    if(v instanceof Date) return v;
+    if(typeof v==='number') return new Date(Math.round((v-25569)*86400*1000));
+    return null;
+  };
+  const toTimeStr = (v)=>{
+    const d = toTimeObj(v);
+    if(!d) return '';
+    const p = n=>String(n).padStart(2,'0');
+    return `${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+
+  const out = {};
+  for(const row of rows){
+    const emp = resolveEmp(row);
+    if(!emp) continue;
+    const dateObj = toDateObj(row[dateKey]);
+    if(!dateObj) continue;
+    if(!dateInFiscalRange(dateObj, monthValue)) continue;
+    const inStr = toTimeStr(row[inKey]);
+    const outStr = toTimeStr(row[outKey]);
+    const hours = attendanceHoursDiff(inStr, outStr);
+    if(!inStr || !outStr || hours<=0) continue;
+    const dateStr = toDateStr(dateObj);
+    if(!out[emp.id]) out[emp.id] = [];
+    out[emp.id].push({date:dateStr, in:inStr, out:outStr, hours});
+  }
+  return out;
+}
+
+async function renderAttendancePage(main){
+  main.innerHTML = `
+    <h2 class="page-title">${t('attendanceTitle')}</h2>
+    <p class="page-sub">${t('attendanceSub')}</p>
+    <div class="filters-row">
+      <select id="at-emp">${state.employees.map(e=>`<option value="${e.id}">${e.code?e.code+' — ':''}${e.name} (${deptName(e.department)})</option>`).join('')}</select>
+      <select id="at-month">${MONTHS.map(([v])=>`<option value="${v}">${monthLabel(v)}</option>`).join('')}</select>
+    </div>
+    <div class="panel">
+      <div class="panel-title">${t('addAttendanceEntry')}</div>
+      <div class="row2">
+        <div class="field"><label>${t('date')}</label><input type="date" id="at-date"/></div>
+        <div class="field"><label>${t('thIn')}</label><input type="time" id="at-in" value="08:00"/></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>${t('thOut')}</label><input type="time" id="at-out" value="17:00"/></div>
+        <div class="field"><label>${t('thActualHours')}</label><input type="text" id="at-calc" class="mono" disabled/></div>
+      </div>
+      <button class="btn btn-solid" id="at-add">${t('addBtn')}</button>
+    </div>
+    <div class="panel">
+      <div class="panel-title">${t('bulkImportAttendanceTitle')}</div>
+      <p class="page-sub" style="margin-top:-6px;">${t('bulkImportAttendanceHint')}</p>
+      <div class="filters-row" style="align-items:center;">
+        <input type="file" id="at-file" accept=".xlsx,.xls,.csv"/>
+        <button class="btn btn-solid" id="at-import">${t('importAttendanceBtn')}</button>
+      </div>
+      <div id="at-import-result" style="margin-top:10px;font-size:12.5px;"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">${t('attendanceEntriesTitle')}</div>
+      <table id="at-table"></table>
+    </div>
+  `;
+  const empSel = document.getElementById('at-emp');
+  const monthSel = document.getElementById('at-month');
+  monthSel.value = currentDefaultMonth();
+  document.getElementById('at-date').value = new Date().toISOString().slice(0,10);
+  empSel.onchange = draw; monthSel.onchange = draw;
+
+  const recalc = ()=>{
+    const h = attendanceHoursDiff(document.getElementById('at-in').value, document.getElementById('at-out').value);
+    document.getElementById('at-calc').value = h>0 ? fmt(h) : '';
+  };
+  document.getElementById('at-in').onchange = recalc;
+  document.getElementById('at-out').onchange = recalc;
+  recalc();
+
+  document.getElementById('at-add').onclick = async ()=>{
+    const date = document.getElementById('at-date').value;
+    const inV = document.getElementById('at-in').value;
+    const outV = document.getElementById('at-out').value;
+    if(!date || !inV || !outV){ alert(t('inOutRequired')); return; }
+    const hours = attendanceHoursDiff(inV, outV);
+    if(hours<=0){ alert(t('outBeforeIn')); return; }
+    const days = await loadAttendance(empSel.value, monthSel.value);
+    const exists = days.some(d=>d.date===date);
+    const updated = days.filter(d=>d.date!==date);
+    updated.push({date, in:inV, out:outV, hours});
+    await saveAttendance(empSel.value, monthSel.value, updated);
+    toast(exists ? t('attendanceExistsOverwrite') : t('attendanceAdded'));
+    draw();
+  };
+
+  document.getElementById('at-import').onclick = async ()=>{
+    const fileInput = document.getElementById('at-file');
+    const resultBox = document.getElementById('at-import-result');
+    if(!fileInput.files || !fileInput.files[0]){ resultBox.textContent = t('chooseFile'); return; }
+    resultBox.textContent = t('loading');
+    try{
+      const buf = await fileInput.files[0].arrayBuffer();
+      const wb = XLSX.read(buf, {type:'array', cellDates:true});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+      const byEmp = parseAttendanceDetailRows(rows, monthSel.value);
+      const empIds = Object.keys(byEmp);
+      if(empIds.length===0){
+        resultBox.textContent = t('importedAttendanceNoMatch');
+        return;
+      }
+      let totalDays = 0;
+      for(const empId of empIds){
+        const newDays = byEmp[empId];
+        const existing = await loadAttendance(empId, monthSel.value);
+        const newDates = new Set(newDays.map(d=>d.date));
+        const merged = existing.filter(d=>!newDates.has(d.date)).concat(newDays);
+        await saveAttendance(empId, monthSel.value, merged);
+        totalDays += newDays.length;
+      }
+      resultBox.innerHTML = `<span class="badge" style="background:#2F7FD422;color:#2F7FD4;">${t('importedAttendanceDays')} ${totalDays} (${empIds.length})</span>`;
+      draw();
+    }catch(e){
+      resultBox.textContent = 'Error: ' + e.message;
+    }
+  };
+
+  draw();
+  async function draw(){
+    const days = await loadAttendance(empSel.value, monthSel.value);
+    days.sort((a,b)=> a.date<b.date?-1:1);
+    const tbl = document.getElementById('at-table');
+    tbl.innerHTML = `
+      <tr><th>${t('thDate')}</th><th>${t('thIn')}</th><th>${t('thOut')}</th><th>${t('thActualHours')}</th><th></th></tr>
+      ${days.map(d=>`
+        <tr>
+          <td class="mono">${d.date}</td>
+          <td class="mono">${d.in}</td>
+          <td class="mono">${d.out}</td>
+          <td class="mono">${fmt(d.hours)}</td>
+          <td><button class="icon-btn" data-date="${d.date}" style="color:var(--rose)">${t('del')}</button></td>
+        </tr>`).join('') || `<tr><td colspan="5"><div class="empty-state">${t('noAttendanceYet')}</div></td></tr>`}
+    `;
+    tbl.querySelectorAll('.icon-btn').forEach(b=>{
+      b.onclick = async ()=>{
+        const updated = days.filter(d=>d.date!==b.dataset.date);
+        await saveAttendance(empSel.value, monthSel.value, updated);
+        draw();
+      };
+    });
+  }
+}
+
+
 async function renderMonthlyDataPage(main){
   main.innerHTML = `
     <h2 class="page-title">${t('monthlyDataTitle')}</h2>
@@ -2319,7 +2547,9 @@ async function renderMyTimesheet(main){
     <div class="panel">
       <div class="panel-title">${t('addNewEntry')}</div>
       <div class="row2">
-        <div class="field"><label>${t('date')}</label><input type="date" id="e-date"/></div>
+        <div class="field"><label>${t('date')}</label><input type="date" id="e-date"/>
+          <div id="e-date-hint" style="font-size:11.5px;color:var(--muted);margin-top:4px;"></div>
+        </div>
         <div class="field"><label>${t('type')}</label>
           <select id="e-type">
             <option value="project">${t('project')}</option>
@@ -2355,12 +2585,30 @@ async function renderMyTimesheet(main){
   const monthSel = document.getElementById('my-month');
   monthSel.value = currentDefaultMonth();
   document.getElementById('e-date').value = new Date().toISOString().slice(0,10);
+  updateDateHint();
   document.getElementById('e-type').onchange = (e)=>{
     document.getElementById('e-prj-wrap').style.display = e.target.value==='project' ? '' : 'none';
   };
   monthSel.onchange = draw;
   document.getElementById('e-add').onclick = addEntry;
+  document.getElementById('e-date').onchange = updateDateHint;
   draw();
+
+  async function updateDateHint(){
+    const date = document.getElementById('e-date').value;
+    const hintEl = document.getElementById('e-date-hint');
+    if(!date){ hintEl.textContent = ''; return; }
+    const month = monthOfDateStr(date) || monthSel.value;
+    const days = await loadAttendance(emp.id, month);
+    const rec = days.find(d=>d.date===date);
+    if(rec){
+      const entries = await loadTimesheet(emp.id, month);
+      const already = entries.filter(e=>e.date===date).reduce((a,e)=>a+Number(e.hours||0),0);
+      hintEl.innerHTML = `${t('dailyTargetHint')}: <b class="mono">${fmt(rec.hours)}</b> — ${t('total')}: <span class="mono">${fmt(already)}</span>`;
+    } else {
+      hintEl.textContent = t('noAttendanceForDate');
+    }
+  }
 
   async function addEntry(){
     const date = document.getElementById('e-date').value;
@@ -2380,8 +2628,18 @@ async function renderMyTimesheet(main){
     const entries = await loadTimesheet(emp.id, monthSel.value);
     entries.push({id:uid('e'), date, type, projectId, hours, location:loc, approved:false, approvedBy:null, approvedAt:null});
     await saveTimesheet(emp.id, monthSel.value, entries);
+    const days = await loadAttendance(emp.id, monthSel.value);
+    const rec = days.find(d=>d.date===date);
+    if(rec){
+      const dayTotal = entries.filter(e=>e.date===date).reduce((a,e)=>a+Number(e.hours||0),0);
+      if(Math.abs(dayTotal - rec.hours) > 0.01){
+        toast(`${t('dailyMismatchWarning')} (${fmt(dayTotal)} / ${fmt(rec.hours)})`);
+        draw(); updateDateHint();
+        return;
+      }
+    }
     toast(t('entryAdded'));
-    draw();
+    draw(); updateDateHint();
   }
 
   async function draw(){
