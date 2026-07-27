@@ -221,6 +221,7 @@ const ENTRY_TYPES = {
   training:{label_ar:'تدريب', label_en:'Training', color:'#6FCF97'},
   tender:{label_ar:'مقترح', label_en:'Proposal', color:'#E8A94F'},
   free:{label_ar:'فري تايم', label_en:'Free Time', color:'#7C93A8'},
+  admin:{label_ar:'عمل إداري', label_en:'Administrative Work', color:'#9B6FCF'},
 };
 const DEFAULT_TARGET_FULLTIME = 198;
 const EMP_STATUSES = [
@@ -378,7 +379,7 @@ const I18N = {
     onsite:'أونسايت', remote:'ريموت',
     myTsTitle:'تايم شيت الساعات —', myTsSub:'وزّع ساعات عملك اليومية على المشروعات/التدريب/العطاءات/فري تايم',
     addNewEntry:'إضافة إدخال جديد', date:'التاريخ', type:'النوع',
-    project:'مشروع', training:'تدريب', tender:'مقترح', freetime:'فري تايم',
+    project:'مشروع', training:'تدريب', tender:'مقترح', freetime:'فري تايم', admin:'عمل إداري',
     hoursCount:'عدد الساعات', workLocation:'مكان العمل', addBtn:'+ إضافة',
     monthEntries:'إدخالات الشهر', total:'الإجمالي', target:'المستهدف',
     noEntriesYet:'لسه معملتش أي إدخال للشهر ده',
@@ -496,7 +497,7 @@ const I18N = {
     onsite:'On-site', remote:'Remote',
     myTsTitle:'Timesheet —', myTsSub:'Distribute your daily work hours across projects/training/tenders/free time',
     addNewEntry:'Add New Entry', date:'Date', type:'Type',
-    project:'Project', training:'Training', tender:'Proposal', freetime:'Free Time',
+    project:'Project', training:'Training', tender:'Proposal', freetime:'Free Time', admin:'Administrative Work',
     hoursCount:'Number of Hours', workLocation:'Work Location', addBtn:'+ Add',
     monthEntries:'Month Entries', total:'Total', target:'Target',
     noEntriesYet:'No entries logged for this month yet',
@@ -2325,6 +2326,7 @@ async function renderMyTimesheet(main){
             <option value="training">${t('training')}</option>
             <option value="tender">${t('tender')}</option>
             <option value="free">${t('freetime')}</option>
+            <option value="admin">${t('admin')}</option>
           </select>
         </div>
       </div>
