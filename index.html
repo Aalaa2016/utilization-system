@@ -420,7 +420,7 @@ const I18N = {
     attendanceAdded:'تم حفظ يوم الحضور', attendanceExistsOverwrite:'فيه يوم حضور مسجل بنفس التاريخ، هيتم استبداله',
     attendanceEntriesTitle:'أيام الحضور المسجلة', noAttendanceYet:'لسه مفيش أيام حضور مسجلة للموظف ده في الشهر ده',
     bulkImportAttendanceTitle:'استيراد جماعي (ملف إكسل زي كشف الحضور)',
-    bulkImportAttendanceHint:'ارفع نفس ملف الحضور (بأعمدة الاسم/الكود، التاريخ، وقت الدخول، وقت الخروج) وهيتم تسجيل يوم حضور بالتفصيل لكل موظف وكل تاريخ تلقائيًا.',
+    bulkImportAttendanceHint:'الأعمدة ينفع تكون بأي ترتيب، المهم يكون فيها كود/اسم الموظف ووقت الدخول والخروج (بأي صيغة وقت). لو الملف مفهوش عمود تاريخ، هيتطبق التاريخ المكتوب فوق في "إضافة يوم حضور" على كل الصفوف.',
     importAttendanceBtn:'استيراد وحفظ', importedAttendanceDays:'تم استيراد وحفظ', importedAttendanceNoMatch:'مقدرناش نطابق أي صف من الملف مع موظفين أو تواريخ صحيحة',
     dailyTargetHint:'ساعات الحضور المسجلة لهذا اليوم', noAttendanceForDate:'مفيش حضور مسجل لهذا اليوم',
     dailyMismatchWarning:'تنبيه: مجموع ساعات التوزيع لهذا اليوم مختلف عن ساعات الحضور الفعلية المسجلة',
@@ -553,7 +553,7 @@ const I18N = {
     attendanceAdded:'Attendance day saved', attendanceExistsOverwrite:'An attendance record already exists for this date and will be replaced',
     attendanceEntriesTitle:'Recorded Attendance Days', noAttendanceYet:'No attendance days recorded yet for this employee this month',
     bulkImportAttendanceTitle:'Bulk Import (same Excel attendance sheet)',
-    bulkImportAttendanceHint:'Upload the same attendance file (with name/code, date, check-in, check-out columns) and a detailed attendance day will be saved automatically for every employee and date.',
+    bulkImportAttendanceHint:'Columns can be in any order — just make sure the file has employee code/name and check-in/check-out (any time format). If the file has no Date column, the date entered above in "Add Attendance Day" will be applied to every row.',
     importAttendanceBtn:'Import & Save', importedAttendanceDays:'Imported and saved', importedAttendanceNoMatch:'Could not match any row from the file with valid employees or dates',
     dailyTargetHint:'Recorded attendance hours for this day', noAttendanceForDate:'No attendance recorded for this day',
     dailyMismatchWarning:'Warning: the total distributed hours for this day differ from the actual recorded attendance hours',
@@ -1963,9 +1963,11 @@ async function renderCapacityDashboard(main){
 }
 
 /* ============================= ADMIN: ATTENDANCE (IN/OUT per day) ============================= */
-function parseAttendanceDetailRows(rows, monthValue){
+function parseAttendanceDetailRows(rows, monthValue, fallbackDateStr){
   // Same flexible column matching as parseAttendanceRows, but keeps per-day IN/OUT detail
   // instead of a monthly total. Returns { [employeeId]: [{date, in, out, hours}, ...] }
+  // Columns can appear in any order. If the file has no Date column, fallbackDateStr
+  // (e.g. the date currently selected on the page) is applied to every row instead.
   if(!rows || !rows.length) return {};
   const sampleKeys = Object.keys(rows[0]);
   const findKey = (patterns)=> sampleKeys.find(k=> patterns.some(p=> k.toString().toLowerCase().includes(p)));
@@ -1974,7 +1976,8 @@ function parseAttendanceDetailRows(rows, monthValue){
   const dateKey = findKey(['date','تاريخ']);
   const inKey = findKey(['check in','checkin','in time','time in','حضور']);
   const outKey = findKey(['check out','checkout','out time','time out','انصراف']);
-  if(!dateKey || !inKey || !outKey) return {};
+  if(!inKey || !outKey) return {};
+  if(!dateKey && !fallbackDateStr) return {};
 
   const empByCode = {}; state.employees.forEach(e=>{ if(e.code) empByCode[String(e.code).trim().toLowerCase()] = e; });
   const empByName = {}; state.employees.forEach(e=>{ empByName[String(e.name).trim().toLowerCase()] = e; });
@@ -2023,11 +2026,12 @@ function parseAttendanceDetailRows(rows, monthValue){
     return '';
   };
 
+  const fallbackDateObj = fallbackDateStr ? toDateObj(fallbackDateStr) : null;
   const out = {};
   for(const row of rows){
     const emp = resolveEmp(row);
     if(!emp) continue;
-    const dateObj = toDateObj(row[dateKey]);
+    const dateObj = dateKey ? toDateObj(row[dateKey]) : fallbackDateObj;
     if(!dateObj) continue;
     if(!dateInFiscalRange(dateObj, monthValue)) continue;
     const inStr = toTimeStr(row[inKey]);
@@ -2163,7 +2167,7 @@ async function renderAttendancePage(main){
       const wb = XLSX.read(buf, {type:'array', cellDates:true});
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
-      const byEmp = parseAttendanceDetailRows(rows, monthSel.value);
+      const byEmp = parseAttendanceDetailRows(rows, monthSel.value, dateInput.value || null);
       const empIds = Object.keys(byEmp);
       if(empIds.length===0){
         resultBox.textContent = t('importedAttendanceNoMatch');
