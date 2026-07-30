@@ -381,17 +381,19 @@ const I18N = {
     editNote:'✎', editNoteTitle:'تعديل Annual / Unpaid / Holiday', saveNote:'حفظ',
     noDataMonth:'مفيش بيانات مسجلة للشهر ده',
     allTsTitle:'كل التايم شيتس', allTsSub:'تصفح إدخالات الساعات لأي موظف في أي شهر',
-    thDate:'التاريخ', thProject:'المشروع', thHours:'الساعات', thLocation:'مكان العمل',
+    thDate:'التاريخ', thProject:'المشروع', thHours:'الساعات', thLocation:'مكان العمل', thTask:'التاسك',
     noEntriesMonth:'مفيش إدخالات للشهر ده',
     onsite:'أونسايت', remote:'ريموت',
     myTsTitle:'تايم شيت الساعات —', myTsSub:'وزّع ساعات عملك اليومية على المشروعات/التدريب/العطاءات/فري تايم',
     addNewEntry:'إضافة إدخال جديد', date:'التاريخ', type:'النوع',
     project:'مشروع', training:'تدريب', tender:'مقترح', freetime:'فري تايم', admin:'عمل إداري',
     hoursCount:'عدد الساعات', workLocation:'مكان العمل', addBtn:'+ إضافة',
+    task:'التاسك', taskPlaceholder:'اكتب كنت شغال على ايه...',
     monthEntries:'إدخالات الشهر', total:'الإجمالي', target:'المستهدف',
     noEntriesYet:'لسه معملتش أي إدخال للشهر ده',
     entryAdded:'تم إضافة الإدخال',
     fillDateHours:'أدخل التاريخ وعدد الساعات بشكل صحيح',
+    fillTask:'من فضلك اكتب التاسك اللي كنت شغال عليه',
     dateOutOfMonth:'التاريخ لازم يكون داخل الشهر المختار في الأعلى:',
     chooseProject:'اختار مشروع',
     myDashTitle:'الطاقة الاستيعابية بتاعتي',
@@ -514,16 +516,18 @@ const I18N = {
     editNote:'✎', editNoteTitle:'Edit Annual / Unpaid / Holiday', saveNote:'Save',
     noDataMonth:'No data logged for this month',
     allTsTitle:'All Timesheets', allTsSub:'Browse hours entries for any employee in any month',
-    thDate:'Date', thProject:'Project', thHours:'Hours', thLocation:'Work Location',
+    thDate:'Date', thProject:'Project', thHours:'Hours', thLocation:'Work Location', thTask:'Task',
     noEntriesMonth:'No entries for this month',
     onsite:'On-site', remote:'Remote',
     myTsTitle:'Timesheet —', myTsSub:'Distribute your daily work hours across projects/training/tenders/free time',
     addNewEntry:'Add New Entry', date:'Date', type:'Type',
     project:'Project', training:'Training', tender:'Proposal', freetime:'Free Time', admin:'Administrative Work',
     hoursCount:'Number of Hours', workLocation:'Work Location', addBtn:'+ Add',
+    task:'Task', taskPlaceholder:'What were you working on...',
     monthEntries:'Month Entries', total:'Total', target:'Target',
     noEntriesYet:'No entries logged for this month yet',
     entryAdded:'Entry added successfully',
+    fillTask:'Please enter the task you worked on',
     fillDateHours:'Please enter a valid date and number of hours',
     dateOutOfMonth:'The date must be within the selected month above:',
     chooseProject:'Please select a project',
@@ -2493,17 +2497,18 @@ async function openDailyTasksModal(emp, month, approverName, onSaved){
     entries.sort((a,b)=> a.date<b.date?-1:1);
     const tbl = document.getElementById('dt-table');
     tbl.innerHTML = `
-      <tr><th>${t('thDate')}</th><th>${t('thType')}</th><th>${t('thProject')}</th><th>${t('thHours')}</th><th>${t('thLocation')}</th><th>${t('thApprovedCol')}</th><th></th></tr>
+      <tr><th>${t('thDate')}</th><th>${t('thType')}</th><th>${t('thProject')}</th><th>${t('thTask')}</th><th>${t('thHours')}</th><th>${t('thLocation')}</th><th>${t('thApprovedCol')}</th><th></th></tr>
       ${entries.map(e=>`
         <tr>
           <td class="mono">${e.date}</td>
           <td><span style="color:${ENTRY_TYPES[e.type].color}">${entryLabel(e.type)}</span></td>
           <td>${e.type==='project' ? (state.projects.find(p=>p.id===e.projectId)?.name || '—') : '—'}</td>
+          <td>${e.task ? e.task : '—'}</td>
           <td class="mono">${e.hours}</td>
           <td>${locLabel(e.location)}</td>
           <td>${e.approved ? `<span style="color:var(--green)">● ${t('entryApprovedBadge')}</span>` : `<span style="color:var(--amber)">● ${t('entryPendingBadge')}</span>`}</td>
           <td><button class="btn btn-sm ${e.approved?'':'btn-solid'}" data-entry-toggle="${e.id}" data-approved="${e.approved?'1':'0'}">${e.approved ? t('revokeEntryBtn') : t('approveEntryBtn')}</button></td>
-        </tr>`).join('') || `<tr><td colspan="7"><div class="empty-state">${t('noEntriesForEmpMonth')}</div></td></tr>`}
+        </tr>`).join('') || `<tr><td colspan="8"><div class="empty-state">${t('noEntriesForEmpMonth')}</div></td></tr>`}
     `;
     tbl.querySelectorAll('button[data-entry-toggle]').forEach(btn=>{
       btn.onclick = async ()=>{
@@ -2682,15 +2687,16 @@ async function renderAllTimesheetsPage(main){
     entries.sort((a,b)=> a.date<b.date?-1:1);
     const tbl = document.getElementById('ts-table');
     tbl.innerHTML = `
-      <tr><th>${t('thDate')}</th><th>${t('thType')}</th><th>${t('thProject')}</th><th>${t('thHours')}</th><th>${t('thLocation')}</th></tr>
+      <tr><th>${t('thDate')}</th><th>${t('thType')}</th><th>${t('thProject')}</th><th>${t('thTask')}</th><th>${t('thHours')}</th><th>${t('thLocation')}</th></tr>
       ${entries.map(e=>`
         <tr>
           <td class="mono">${e.date}</td>
           <td><span style="color:${ENTRY_TYPES[e.type].color}">${entryLabel(e.type)}</span></td>
           <td>${e.type==='project' ? (state.projects.find(p=>p.id===e.projectId)?.name || '—') : '—'}</td>
+          <td>${e.task ? e.task : '—'}</td>
           <td class="mono">${e.hours}</td>
           <td>${locLabel(e.location)}</td>
-        </tr>`).join('') || `<tr><td colspan="5"><div class="empty-state">${t('noEntriesMonth')}</div></td></tr>`}
+        </tr>`).join('') || `<tr><td colspan="6"><div class="empty-state">${t('noEntriesMonth')}</div></td></tr>`}
     `;
   }
 }
@@ -2725,6 +2731,9 @@ async function renderMyTimesheet(main){
         </div>
         <div class="field"><label>${t('hoursCount')}</label><input type="number" id="e-hours" min="0.5" step="0.5" value="8"/></div>
       </div>
+      <div class="field" id="e-task-wrap"><label>${t('task')}</label>
+        <input type="text" id="e-task" placeholder="${t('taskPlaceholder')}"/>
+      </div>
       <div class="field"><label>${t('workLocation')}</label>
         <select id="e-loc"><option value="onsite">${t('onsite')}</option><option value="remote">${t('remote')}</option></select>
       </div>
@@ -2747,7 +2756,9 @@ async function renderMyTimesheet(main){
   updateDateHint();
   document.getElementById('e-type').onchange = (e)=>{
     document.getElementById('e-prj-wrap').style.display = e.target.value==='project' ? '' : 'none';
+    document.getElementById('e-task-wrap').style.display = e.target.value==='free' ? 'none' : '';
   };
+  document.getElementById('e-task-wrap').style.display = document.getElementById('e-type').value==='free' ? 'none' : '';
   monthSel.onchange = draw;
   document.getElementById('e-add').onclick = addEntry;
   document.getElementById('e-date').onchange = updateDateHint;
@@ -2782,7 +2793,9 @@ async function renderMyTimesheet(main){
     const hours = Number(document.getElementById('e-hours').value);
     const loc = document.getElementById('e-loc').value;
     const projectId = type==='project' ? document.getElementById('e-prj').value : null;
+    const task = type==='free' ? null : document.getElementById('e-task').value.trim();
     if(!date || !hours || hours<=0){ alert(t('fillDateHours')); return; }
+    if(type!=='free' && !task){ alert(t('fillTask')); return; }
     const [dy,dm,dd] = date.split('-').map(Number);
     const localDate = new Date(dy, dm-1, dd);
     if(emp.hireDate){
@@ -2792,7 +2805,7 @@ async function renderMyTimesheet(main){
     if(!dateInFiscalRange(localDate, monthSel.value)){ alert(t('dateOutOfMonth')+' '+monthLabel(monthSel.value)+' ('+fiscalRangeLabel(monthSel.value)+')'); return; }
     if(type==='project' && !projectId){ alert(t('chooseProject')); return; }
     const entries = await loadTimesheet(emp.id, monthSel.value);
-    entries.push({id:uid('e'), date, type, projectId, hours, location:loc, approved:false, approvedBy:null, approvedAt:null});
+    entries.push({id:uid('e'), date, type, projectId, task, hours, location:loc, approved:false, approvedBy:null, approvedAt:null});
     await saveTimesheet(emp.id, monthSel.value, entries);
     const days = await loadAttendance(emp.id, monthSel.value);
     const rec = emp.status==='active_fulltime' ? days.find(d=>d.date===date) : null;
@@ -2822,17 +2835,18 @@ async function renderMyTimesheet(main){
     document.getElementById('my-ts-approval').innerHTML = `${t('thApprovalStatus')}: ${approvalStatusBadge(appr.status)}`;
     const tbl = document.getElementById('my-ts-table');
     tbl.innerHTML = `
-      <tr><th>${t('thDate')}</th><th>${t('thType')}</th><th>${t('thProject')}</th><th>${t('thHours')}</th><th>${t('thLocation')}</th><th>${t('thApprovedCol')}</th><th></th></tr>
+      <tr><th>${t('thDate')}</th><th>${t('thType')}</th><th>${t('thProject')}</th><th>${t('thTask')}</th><th>${t('thHours')}</th><th>${t('thLocation')}</th><th>${t('thApprovedCol')}</th><th></th></tr>
       ${entries.map(e=>`
         <tr>
           <td class="mono">${e.date}</td>
           <td><span style="color:${ENTRY_TYPES[e.type].color}">${entryLabel(e.type)}</span></td>
           <td>${e.type==='project' ? (state.projects.find(p=>p.id===e.projectId)?.name || '—') : '—'}</td>
+          <td>${e.task ? e.task : '—'}</td>
           <td class="mono">${e.hours}</td>
           <td>${locLabel(e.location)}</td>
           <td>${e.approved ? `<span style="color:var(--green)">● ${t('entryApprovedBadge')}</span>` : `<span style="color:var(--amber)">● ${t('entryPendingBadge')}</span>`}</td>
           <td>${e.approved ? '—' : `<button class="icon-btn" data-id="${e.id}" style="color:var(--rose)">${t('del')}</button>`}</td>
-        </tr>`).join('') || `<tr><td colspan="7"><div class="empty-state">${t('noEntriesYet')}</div></td></tr>`}
+        </tr>`).join('') || `<tr><td colspan="8"><div class="empty-state">${t('noEntriesYet')}</div></td></tr>`}
     `;
     tbl.querySelectorAll('.icon-btn').forEach(b=>{
       b.onclick = async ()=>{
