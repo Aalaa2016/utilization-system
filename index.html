@@ -1051,6 +1051,7 @@ function renderEmployeesPage(main){
       <div class="filters-row" style="margin:0;">
         <select id="f-dept"><option value="">${t('allDepts')}</option>${DEPARTMENTS.map(d=>`<option value="${d.id}">${deptName(d.id)}</option>`).join('')}</select>
         <select id="f-status"><option value="">${t('allStatuses')}</option>${EMP_STATUSES.map(s=>`<option value="${s.id}">${empStatusLabel(s.id)}</option>`).join('')}</select>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);"><input type="checkbox" id="f-show-resigned"/> ${t('showResigned')}</label>
       </div>
       <div style="display:flex;gap:8px;">
         <button class="btn btn-sm btn-danger" id="reset-demo">${t('resetDemo')}</button>
@@ -1063,12 +1064,14 @@ function renderEmployeesPage(main){
   document.getElementById('reset-demo').onclick = resetDemoData;
   document.getElementById('f-dept').onchange = drawEmpTable;
   document.getElementById('f-status').onchange = drawEmpTable;
+  document.getElementById('f-show-resigned').onchange = drawEmpTable;
   drawEmpTable();
 
   function drawEmpTable(){
     const dept = document.getElementById('f-dept').value;
     const status = document.getElementById('f-status').value;
-    let list = state.employees.filter(e=> (!dept||e.department===dept) && (!status||e.status===status));
+    const showResigned = document.getElementById('f-show-resigned').checked;
+    let list = state.employees.filter(e=> (!dept||e.department===dept) && (!status||e.status===status) && (showResigned || !e.resignDate));
     list = list.slice().sort((a,b)=>{
       const ca = a.code||'', cb = b.code||'';
       if(!ca && !cb) return 0;
@@ -1160,7 +1163,7 @@ function openEmployeeModal(emp){
         <div class="field"><label>${t('directManager')}</label>
           <select id="m-manager">
             <option value="">${t('noManager')}</option>
-            ${state.employees.filter(x=>x.id!==emp.id && isManagerRole(x.role)).map(x=>`<option value="${x.id}" ${emp.managerId===x.id?'selected':''}>${x.name}</option>`).join('')}
+            ${state.employees.filter(x=>x.id!==emp.id && isManagerRole(x.role) && (!x.resignDate || x.id===emp.managerId)).map(x=>`<option value="${x.id}" ${emp.managerId===x.id?'selected':''}>${x.name}</option>`).join('')}
           </select>
         </div>
       </div>
@@ -1681,7 +1684,6 @@ function currentDefaultMonth(){
 
 /* ============================= ADMIN: UTILIZATION & CAPACITY DASHBOARD ============================= */
 async function renderCapacityDashboard(main){
-  const allActive = state.employees.slice().sort((a,b)=> (a.name||'').localeCompare(b.name||''));
   main.innerHTML = `
     <h2 class="page-title">📊 ${t('capTitle')}</h2>
     <p class="page-sub">🔍 ${t('capSub')}</p>
@@ -1689,7 +1691,7 @@ async function renderCapacityDashboard(main){
       <div class="filters-row">
         <div>
           <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px;">${t('capFilterEmployee')}</label>
-          <select id="cap-emp"><option value="">${t('capAll')}</option>${allActive.map(e=>`<option value="${e.id}">${e.name}</option>`).join('')}</select>
+          <select id="cap-emp"><option value="">${t('capAll')}</option></select>
         </div>
         <div>
           <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px;">${t('capFilterDept')}</label>
@@ -1724,7 +1726,18 @@ async function renderCapacityDashboard(main){
   const defMonth = currentDefaultMonth();
   fromSel.value = MONTHS[0][0];
   toSel.value = defMonth;
-  [empSel,deptSel,fromSel,toSel,prjSel,showResignedChk].forEach(s=>s.onchange=draw);
+  function rebuildEmpFilterOptions(){
+    const prev = empSel.value;
+    const list = state.employees.filter(e=> showResignedChk.checked || employeeCountsInMonth(e, toSel.value))
+      .slice().sort((a,b)=> (a.name||'').localeCompare(b.name||''));
+    empSel.innerHTML = `<option value="">${t('capAll')}</option>` + list.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+    if(list.some(e=>e.id===prev)) empSel.value = prev;
+  }
+  rebuildEmpFilterOptions();
+  [deptSel,fromSel,prjSel].forEach(s=>s.onchange=draw);
+  toSel.onchange = ()=>{ rebuildEmpFilterOptions(); draw(); };
+  showResignedChk.onchange = ()=>{ rebuildEmpFilterOptions(); draw(); };
+  empSel.onchange = draw;
   draw();
 
   async function draw(){
@@ -2050,8 +2063,9 @@ async function renderAttendancePage(main){
     <h2 class="page-title">${t('attendanceTitle')}</h2>
     <p class="page-sub">${t('attendanceSub')}</p>
     <div class="filters-row">
-      <select id="at-emp">${state.employees.map(e=>`<option value="${e.id}">${e.code?e.code+' — ':''}${e.name} (${deptName(e.department)})</option>`).join('')}</select>
+      <select id="at-emp"></select>
       <select id="at-month">${MONTHS.map(([v])=>`<option value="${v}">${monthLabel(v)}</option>`).join('')}</select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);"><input type="checkbox" id="at-show-resigned"/> ${t('showResigned')}</label>
     </div>
     <div class="panel">
       <div class="panel-title">${t('addAttendanceEntry')}</div>
@@ -2092,10 +2106,21 @@ async function renderAttendancePage(main){
   const dateInput = document.getElementById('at-date');
   monthSel.value = currentDefaultMonth();
   dateInput.value = new Date().toISOString().slice(0,10);
-  empSel.onchange = draw; monthSel.onchange = draw;
+  const showResignedChk = document.getElementById('at-show-resigned');
+  function rebuildEmpOptions(){
+    const prev = empSel.value;
+    const showResigned = showResignedChk.checked;
+    const list = state.employees.filter(e=> showResigned || employeeCountsInMonth(e, monthSel.value));
+    empSel.innerHTML = list.map(e=>`<option value="${e.id}">${e.code?e.code+' — ':''}${e.name} (${deptName(e.department)})</option>`).join('');
+    if(list.some(e=>e.id===prev)) empSel.value = prev;
+  }
+  rebuildEmpOptions();
+  empSel.onchange = draw;
+  monthSel.onchange = ()=>{ rebuildEmpOptions(); draw(); };
+  showResignedChk.onchange = ()=>{ rebuildEmpOptions(); draw(); };
   dateInput.onchange = ()=>{
     const m = monthOfDateStr(dateInput.value);
-    if(m && m!==monthSel.value){ monthSel.value = m; draw(); }
+    if(m && m!==monthSel.value){ monthSel.value = m; rebuildEmpOptions(); draw(); }
   };
 
   const recalc = ()=>{
@@ -2229,6 +2254,7 @@ async function renderMonthlyDataPage(main){
     <div class="filters-row">
       <select id="md-month">${MONTHS.map(([v])=>`<option value="${v}">${monthLabel(v)}</option>`).join('')}</select>
       <select id="md-dept"><option value="">${t('allDepts')}</option>${DEPARTMENTS.map(d=>`<option value="${d.id}">${deptName(d.id)}</option>`).join('')}</select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);"><input type="checkbox" id="md-show-resigned"/> ${t('showResigned')}</label>
     </div>
     <div class="panel" style="font-size:12.5px;color:var(--muted);">
       <div>${t('fiscalPeriodNote')}</div>
@@ -2254,8 +2280,9 @@ async function renderMonthlyDataPage(main){
   `;
   const monthSel = document.getElementById('md-month');
   const deptSel = document.getElementById('md-dept');
+  const showResignedChk = document.getElementById('md-show-resigned');
   monthSel.value = currentDefaultMonth();
-  monthSel.onchange = draw; deptSel.onchange = draw;
+  monthSel.onchange = draw; deptSel.onchange = draw; showResignedChk.onchange = draw;
   let parsedByCode = null; // populated after parsing an attendance file
 
   document.getElementById('md-parse').onclick = async ()=>{
@@ -2314,7 +2341,7 @@ async function renderMonthlyDataPage(main){
     document.getElementById('md-period').textContent = `${t('fiscalPeriodLbl')} ${fiscalRangeLabel(monthSel.value)}`;
     const month = monthSel.value;
     const deptFilter = deptSel.value;
-    const activeEmps = state.employees.filter(e=>(!deptFilter || e.department===deptFilter) && employeeActiveInMonth(e, month));
+    const activeEmps = state.employees.filter(e=>(!deptFilter || e.department===deptFilter) && employeeActiveInMonth(e, month) && (showResignedChk.checked || employeeCountsInMonth(e, month)));
     const [targets, approvedMap, notesMap] = await Promise.all([
       loadAllTargetsForMonth(activeEmps.map(e=>e.id), month),
       loadAllApprovedForMonth(activeEmps.map(e=>e.id), month),
@@ -2360,6 +2387,7 @@ async function renderTeamApprovalPage(main){
     ${team.length===0 ? `<div class="panel"><div class="empty-state">${t('noTeamMembers')}</div></div>` : `
     <div class="filters-row">
       <select id="tm-month">${MONTHS.map(([v])=>`<option value="${v}">${monthLabel(v)}</option>`).join('')}</select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);"><input type="checkbox" id="tm-show-resigned"/> ${t('showResigned')}</label>
     </div>
     <div class="panel">
       <div class="util-table-wrap"><table id="tm-table" class="util-emp-table"></table></div>
@@ -2368,13 +2396,14 @@ async function renderTeamApprovalPage(main){
   `;
   if(team.length===0) return;
   const monthSel = document.getElementById('tm-month');
+  const showResignedChk = document.getElementById('tm-show-resigned');
   monthSel.value = currentDefaultMonth();
-  monthSel.onchange = draw;
+  monthSel.onchange = draw; showResignedChk.onchange = draw;
   draw();
 
   async function draw(){
     const month = monthSel.value;
-    const activeTeam = team.filter(e=>employeeActiveInMonth(e, month));
+    const activeTeam = team.filter(e=>employeeActiveInMonth(e, month) && (showResignedChk.checked || employeeCountsInMonth(e, month)));
     const teamIds = activeTeam.map(e=>e.id);
     const [targets, approvedMap, notesMap, apprMap] = await Promise.all([
       loadAllTargetsForMonth(teamIds, month),
@@ -2496,6 +2525,7 @@ async function renderGmApprovalsPage(main){
     <div class="filters-row">
       <select id="gm-month">${MONTHS.map(([v])=>`<option value="${v}">${monthLabel(v)}</option>`).join('')}</select>
       <select id="gm-dept"><option value="">${t('allDepts')}</option>${DEPARTMENTS.map(d=>`<option value="${d.id}">${deptName(d.id)}</option>`).join('')}</select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);"><input type="checkbox" id="gm-show-resigned"/> ${t('showResigned')}</label>
     </div>
     <div class="panel">
       <div class="util-table-wrap"><table id="gm-table" class="util-emp-table"></table></div>
@@ -2503,14 +2533,15 @@ async function renderGmApprovalsPage(main){
   `;
   const monthSel = document.getElementById('gm-month');
   const deptSel = document.getElementById('gm-dept');
+  const showResignedChk = document.getElementById('gm-show-resigned');
   monthSel.value = currentDefaultMonth();
-  monthSel.onchange = draw; deptSel.onchange = draw;
+  monthSel.onchange = draw; deptSel.onchange = draw; showResignedChk.onchange = draw;
   draw();
 
   async function draw(){
     const month = monthSel.value;
     const deptFilter = deptSel.value;
-    const emps = state.employees.filter(e=>(!deptFilter || e.department===deptFilter) && employeeActiveInMonth(e, month));
+    const emps = state.employees.filter(e=>(!deptFilter || e.department===deptFilter) && employeeActiveInMonth(e, month) && (showResignedChk.checked || employeeCountsInMonth(e, month)));
     const empIds = emps.map(e=>e.id);
     const [targets, approvedMap, apprMap] = await Promise.all([
       loadAllTargetsForMonth(empIds, month),
@@ -2625,15 +2656,26 @@ async function renderAllTimesheetsPage(main){
     <h2 class="page-title">${t('allTsTitle')}</h2>
     <p class="page-sub">${t('allTsSub')}</p>
     <div class="filters-row">
-      <select id="f-emp">${state.employees.map(e=>`<option value="${e.id}">${e.code?e.code+' — ':''}${e.name} (${deptName(e.department)})</option>`).join('')}</select>
+      <select id="f-emp"></select>
       <select id="f-month3">${MONTHS.map(([v])=>`<option value="${v}">${monthLabel(v)}</option>`).join('')}</select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);"><input type="checkbox" id="ts-show-resigned"/> ${t('showResigned')}</label>
     </div>
     <div class="panel"><table id="ts-table"></table></div>
   `;
   const empSel = document.getElementById('f-emp');
   const monthSel = document.getElementById('f-month3');
+  const showResignedChk = document.getElementById('ts-show-resigned');
   monthSel.value = currentDefaultMonth();
-  empSel.onchange = draw; monthSel.onchange = draw;
+  function rebuildEmpOptions(){
+    const prev = empSel.value;
+    const list = state.employees.filter(e=> showResignedChk.checked || employeeCountsInMonth(e, monthSel.value));
+    empSel.innerHTML = list.map(e=>`<option value="${e.id}">${e.code?e.code+' — ':''}${e.name} (${deptName(e.department)})</option>`).join('');
+    if(list.some(e=>e.id===prev)) empSel.value = prev;
+  }
+  rebuildEmpOptions();
+  empSel.onchange = draw;
+  monthSel.onchange = ()=>{ rebuildEmpOptions(); draw(); };
+  showResignedChk.onchange = ()=>{ rebuildEmpOptions(); draw(); };
   draw();
   async function draw(){
     const entries = await loadTimesheet(empSel.value, monthSel.value);
