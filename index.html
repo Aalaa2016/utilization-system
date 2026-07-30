@@ -2864,9 +2864,18 @@ async function renderMyDashboard(main){
   main.innerHTML = `
     <h2 class="page-title">${t('myDashTitle')}</h2>
     <p class="page-sub">${emp.name} — ${deptName(emp.department)}</p>
+    <div class="filters-row"><select id="d-month">${MONTHS.map(([v])=>`<option value="${v}">${monthLabel(v)}</option>`).join('')}</select></div>
     <div id="my-dash-body"><div class="empty-state">${t('loading')}</div></div>
+    <div class="panel">
+      <div class="panel-title">${t('utilTrend')}</div>
+      <div class="chart-box"><canvas id="chart-trend"></canvas></div>
+    </div>
   `;
+  const monthSel = document.getElementById('d-month');
+  monthSel.value = currentDefaultMonth();
+  monthSel.onchange = draw;
   draw();
+  drawTrend();
 
   async function draw(){
     const entries = await loadTimesheet(emp.id, monthSel.value);
@@ -2880,7 +2889,19 @@ async function renderMyDashboard(main){
     `;
   }
 
-
+  async function drawTrend(){
+    const labels=[], utils=[];
+    for(const [v] of MONTHS){
+      const entries = await loadTimesheet(emp.id, v);
+      const s = summarizeEntries(entries);
+      labels.push(monthLabel(v).split(' ')[0]);
+      utils.push(emp.targetHours ? (s.project/emp.targetHours*100) : 0);
+    }
+    mkChart('chart-trend','line', {
+      labels,
+      datasets:[{label:'Utilization %', data:utils, borderColor:'#2F7FD4', backgroundColor:'rgba(47,127,212,.15)', fill:true, tension:.3}]
+    }, {scales:{y:{beginAtZero:true,max:120,ticks:{color:'#7C93A8'},grid:{color:'#D7E4F2'}},x:{ticks:{color:'#7C93A8'},grid:{display:false}}}, plugins:{legend:{display:false}}});
+  }
 }
 
 /* ============================= INIT ============================= */
