@@ -427,6 +427,7 @@ const I18N = {
     showResigned:'إظهار المستقيلين',
     attStatus:'حالة اليوم',
     availableToDistribute:'المتاح للتوزيع',
+    downloadTemplateBtn:'تنزيل نموذج إكسل',
   },
   en: {
     appTitle:'Engineering Utilization Management System',
@@ -559,6 +560,7 @@ const I18N = {
     showResigned:'Show Resigned',
     attStatus:'Day Status',
     availableToDistribute:'Available to Distribute',
+    downloadTemplateBtn:'Download Excel Template',
   }
 };
 function t(key){ return (I18N[state.lang] && I18N[state.lang][key]) || key; }
@@ -1990,18 +1992,35 @@ function parseAttendanceDetailRows(rows, monthValue){
   const toDateObj = (v)=>{
     if(v instanceof Date) return v;
     if(typeof v==='number') return new Date(Math.round((v-25569)*86400*1000));
+    if(typeof v==='string'){
+      const s = v.trim();
+      let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if(m) return new Date(+m[1], +m[2]-1, +m[3]);
+      m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if(m){
+        const a=+m[1], b=+m[2], y=+m[3];
+        if(a>12) return new Date(y, b-1, a);
+        if(b>12) return new Date(y, a-1, b);
+        return new Date(y, b-1, a); // ambiguous DD/MM vs MM/DD: default to DD/MM
+      }
+    }
     const d = new Date(v); return isNaN(d) ? null : d;
   };
-  const toTimeObj = (v)=>{
-    if(v instanceof Date) return v;
-    if(typeof v==='number') return new Date(Math.round((v-25569)*86400*1000));
-    return null;
-  };
+  const pad2 = n=>String(n).padStart(2,'0');
   const toTimeStr = (v)=>{
-    const d = toTimeObj(v);
-    if(!d) return '';
-    const p = n=>String(n).padStart(2,'0');
-    return `${p(d.getHours())}:${p(d.getMinutes())}`;
+    if(v instanceof Date) return `${pad2(v.getHours())}:${pad2(v.getMinutes())}`;
+    if(typeof v==='number') { const d = new Date(Math.round((v-25569)*86400*1000)); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
+    if(typeof v==='string'){
+      const s = v.trim();
+      const m = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM|am|pm)?$/);
+      if(m){
+        let h = parseInt(m[1],10); const mi = parseInt(m[2],10); const ap = m[3] ? m[3].toUpperCase() : null;
+        if(ap==='PM' && h<12) h += 12;
+        if(ap==='AM' && h===12) h = 0;
+        if(h<24 && mi<60) return `${pad2(h)}:${pad2(mi)}`;
+      }
+    }
+    return '';
   };
 
   const out = {};
@@ -2048,7 +2067,10 @@ async function renderAttendancePage(main){
       <button class="btn btn-solid" id="at-add">${t('addBtn')}</button>
     </div>
     <div class="panel">
-      <div class="panel-title">${t('bulkImportAttendanceTitle')}</div>
+      <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <span>${t('bulkImportAttendanceTitle')}</span>
+        <button class="btn" id="at-download-template" style="font-size:12px;">⬇ ${t('downloadTemplateBtn')}</button>
+      </div>
       <p class="page-sub" style="margin-top:-6px;">${t('bulkImportAttendanceHint')}</p>
       <div class="filters-row" style="align-items:center;">
         <input type="file" id="at-file" accept=".xlsx,.xls,.csv"/>
@@ -2111,6 +2133,24 @@ async function renderAttendancePage(main){
     await syncAttendanceToMonthlyData(empSel.value, month);
     toast(exists ? t('attendanceExistsOverwrite') : t('attendanceAdded'));
     draw();
+  };
+
+  document.getElementById('at-download-template').onclick = ()=>{
+    const {start,end} = fiscalRange(monthSel.value);
+    const rows = [];
+    const cur = new Date(start);
+    while(cur<=end){
+      const dateStr = toDateStr(cur);
+      state.employees.forEach(e=>{
+        rows.push({Code:e.code||'', Name:e.name, Date:dateStr, 'Check In':'', 'Check Out':''});
+      });
+      cur.setDate(cur.getDate()+1);
+    }
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{wch:10},{wch:26},{wch:12},{wch:10},{wch:10}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+    XLSX.writeFile(wb, `attendance-template-${monthSel.value}.xlsx`);
   };
 
   document.getElementById('at-import').onclick = async ()=>{
