@@ -400,7 +400,8 @@ const I18N = {
     myDashByMonth:'التفاصيل شهر بشهر', thMonth:'الشهر',
     hoursDistribution:'توزيع الساعات هذا الشهر', attendanceRatio:'نسبة الحضور المعتمد مقابل المستهدف', approvedAttendance:'الحضور المعتمد',
     attendanceNote:'الفرق بين الساعات المسجلة والمستهدفة عادة بيعكس الإجازات الرسمية والسنوية. لو النسبة قليلة جدًا وملهاش سبب إجازة، راجع تسجيلك في التايم شيت.',
-    utilTrend:'اتجاه الـ Utilization عبر الشهور',
+    utilTrend:'نسبة الساعات المعتمدة إلى المستهدف عبر الشهور',
+    approvedVsTargetLbl:'Approved Hours % of Target',
     totalLoggedHoursLbl:'إجمالي الساعات المسجلة',
     changePasswordTitle:'تغيير كلمة المرور', currentPassword:'كلمة المرور الحالية', newPassword:'كلمة المرور الجديدة', confirmPassword:'تأكيد كلمة المرور الجديدة',
     passwordChanged:'تم تغيير كلمة المرور بنجاح', currentPasswordWrong:'كلمة المرور الحالية غير صحيحة', passwordsNoMatch:'كلمتا المرور غير متطابقتين', passwordTooShort:'كلمة المرور لازم تكون 4 حروف على الأقل',
@@ -536,7 +537,8 @@ const I18N = {
     myDashByMonth:'Month by Month Breakdown', thMonth:'Month',
     hoursDistribution:'Hours Distribution This Month', attendanceRatio:'Approved Attendance vs Target', approvedAttendance:'Approved Attendance',
     attendanceNote:'The difference between logged and target hours usually reflects official and annual leave. If the ratio is too low with no leave reason, review your timesheet entries.',
-    utilTrend:'Utilization Trend Over Months',
+    utilTrend:'Approved Hours % of Target — Over Months',
+    approvedVsTargetLbl:'Approved Hours % of Target',
     totalLoggedHoursLbl:'Total Logged Hours',
     changePasswordTitle:'Change Password', currentPassword:'Current Password', newPassword:'New Password', confirmPassword:'Confirm New Password',
     passwordChanged:'Password changed successfully', currentPasswordWrong:'Current password is incorrect', passwordsNoMatch:'New passwords do not match', passwordTooShort:'Password must be at least 4 characters',
@@ -2954,16 +2956,15 @@ async function renderMyDashboard(main){
   }
 
   async function drawTrend(){
-    const labels=[], utils=[];
+    const labels=[], ratios=[];
     for(const [v] of MONTHS){
-      const entries = await loadTimesheet(emp.id, v);
-      const s = summarizeEntries(entries);
+      const m = await monthMetrics(v);
       labels.push(monthLabel(v).split(' ')[0]);
-      utils.push(emp.targetHours ? (s.project/emp.targetHours*100) : 0);
+      ratios.push(m.target ? (m.approvedHours/m.target*100) : 0);
     }
     mkChart('chart-trend','line', {
       labels,
-      datasets:[{label:'Utilization %', data:utils, borderColor:'#2F7FD4', backgroundColor:'rgba(47,127,212,.15)', fill:true, tension:.3}]
+      datasets:[{label:t('approvedVsTargetLbl'), data:ratios, borderColor:'#2F7FD4', backgroundColor:'rgba(47,127,212,.15)', fill:true, tension:.3}]
     }, {scales:{y:{beginAtZero:true,max:120,ticks:{color:'#7C93A8'},grid:{color:'#D7E4F2'}},x:{ticks:{color:'#7C93A8'},grid:{display:false}}}, plugins:{legend:{display:false}}});
   }
 }
