@@ -377,8 +377,8 @@ const I18N = {
     grpApproved:'ساعات العمل المعتمدة', grpDistribution:'توزيع ساعات العمل المستهدف', grpUtilization:'Utilization', grpNote:'Note',
     colOnsite:'Onsite', colRemotly:'Remotly', colTotal:'Total', colProjects:'Projects', colProposal:'Proposal', colTraining:'Training', colFreeTime:'Free time',
     colUtilManHours:'Utilization % Man hours', colUtilProjects:'Utilization % Projects', colUtilProposal:'Utilization % Proposal', colUtilTraining:'Training', colUtilFreeTime:'Free time',
-    colAnnual:'Annual', colUnpaid:'Unpaid', colHoliday:'Holiday',
-    editNote:'✎', editNoteTitle:'تعديل Annual / Unpaid / Holiday', saveNote:'حفظ',
+    colAnnual:'Annual', colUnpaid:'Unpaid', colHoliday:'Holiday', colSick:'مرضي',
+    editNote:'✎', editNoteTitle:'تعديل Annual / Unpaid / Holiday / Sick', saveNote:'حفظ',
     noDataMonth:'مفيش بيانات مسجلة للشهر ده',
     allTsTitle:'كل التايم شيتس', allTsSub:'تصفح إدخالات الساعات لأي موظف في أي شهر',
     thDate:'التاريخ', thProject:'المشروع', thHours:'الساعات', thLocation:'مكان العمل', thTask:'التاسك',
@@ -513,8 +513,8 @@ const I18N = {
     grpApproved:'Approved Work Hours', grpDistribution:'Target Work Hours Distribution', grpUtilization:'Utilization', grpNote:'Note',
     colOnsite:'Onsite', colRemotly:'Remotly', colTotal:'Total', colProjects:'Projects', colProposal:'Proposal', colTraining:'Training', colFreeTime:'Free time',
     colUtilManHours:'Utilization % Man hours', colUtilProjects:'Utilization % Projects', colUtilProposal:'Utilization % Proposal', colUtilTraining:'Training', colUtilFreeTime:'Free time',
-    colAnnual:'Annual', colUnpaid:'Unpaid', colHoliday:'Holiday',
-    editNote:'✎', editNoteTitle:'Edit Annual / Unpaid / Holiday', saveNote:'Save',
+    colAnnual:'Annual', colUnpaid:'Unpaid', colHoliday:'Holiday', colSick:'Sick',
+    editNote:'✎', editNoteTitle:'Edit Annual / Unpaid / Holiday / Sick', saveNote:'Save',
     noDataMonth:'No data logged for this month',
     allTsTitle:'All Timesheets', allTsSub:'Browse hours entries for any employee in any month',
     thDate:'Date', thProject:'Project', thHours:'Hours', thLocation:'Work Location', thTask:'Task',
@@ -727,10 +727,11 @@ async function syncAttendanceToMonthlyData(empId, month){
   const statusOf = d => d.status || 'present';
   const approvedHours = days.filter(d=>statusOf(d)==='present').reduce((a,d)=>a+Number(d.hours||0),0);
   const annual = days.filter(d=>statusOf(d)==='annual').length;
-  const unpaid = days.filter(d=>statusOf(d)==='unpaid' || statusOf(d)==='sick').length;
+  const unpaid = days.filter(d=>statusOf(d)==='unpaid').length;
   const holiday = days.filter(d=>statusOf(d)==='holiday').length;
+  const sick = days.filter(d=>statusOf(d)==='sick').length;
   await saveApprovedHours(empId, month, approvedHours);
-  await saveNote(empId, month, {annual, unpaid, holiday});
+  await saveNote(empId, month, {annual, unpaid, holiday, sick});
 }
 
 async function loadAllTimesheetsForMonth(month){
@@ -774,7 +775,7 @@ function summarizeEntries(entries){
 
 /* ============================= EMPLOYEE NOTES (Annual / Unpaid / Holiday) ============================= */
 function noteKey(empId, month){ return `note:${empId}:${month}`; }
-async function loadNote(empId, month){ return await loadJSON(noteKey(empId,month), true, {annual:0, unpaid:0, holiday:0}); }
+async function loadNote(empId, month){ return await loadJSON(noteKey(empId,month), true, {annual:0, unpaid:0, holiday:0, sick:0}); }
 async function saveNote(empId, month, note){ await saveJSON(noteKey(empId,month), true, note); }
 async function loadAllNotesForMonth(empIds, month){
   const out = {};
@@ -1462,7 +1463,7 @@ async function renderAdminDashboard(main){
       const rate = billableHours ? (cost/billableHours) : rateAt(e, monthEndDateStr(month));
       sumTarget += target; sumProject += (counts ? s.project : 0); sumLogged += effectiveTotal;
       sumCost += cost; sumProjectCost += projectCost;
-      return {emp:e, s, target, effectiveTotal, counts, cost, projectCost, proposalCost, rate, note: notesMap[e.id] || {annual:0, unpaid:0, holiday:0}};
+      return {emp:e, s, target, effectiveTotal, counts, cost, projectCost, proposalCost, rate, note: notesMap[e.id] || {annual:0, unpaid:0, holiday:0, sick:0}};
     });
     const overallUtil = sumTarget ? (sumProject/sumTarget*100) : 0;
 
@@ -1594,6 +1595,7 @@ async function renderAdminDashboard(main){
           <th class="grp-note">${t('colAnnual')}</th>
           <th class="grp-note">${t('colUnpaid')}</th>
           <th class="grp-note">${t('colHoliday')}</th>
+          <th class="grp-note">${t('colSick')}</th>
         </tr>
       </thead>
       <tbody>
@@ -1624,6 +1626,7 @@ async function renderAdminDashboard(main){
           <td class="mono grp-note">${fmt(note.annual)}</td>
           <td class="mono grp-note">${fmt(note.unpaid)}</td>
           <td class="mono grp-note">${fmt(note.holiday)}</td>
+          <td class="mono grp-note">${fmt(note.sick||0)}</td>
           <td><button class="icon-btn" data-emp="${emp.id}" title="${t('editNote')}">${t('editNote')}</button></td>
         </tr>`;
       }).join('') || `<tr><td colspan="20"><div class="empty-state">${t('noDataMonth')}</div></td></tr>`}
@@ -1649,7 +1652,10 @@ function openNoteModal(emp, month, note, onSaved){
         <div class="field"><label>${t('colAnnual')}</label><input id="n-annual" type="number" value="${note.annual||0}"/></div>
         <div class="field"><label>${t('colUnpaid')}</label><input id="n-unpaid" type="number" value="${note.unpaid||0}"/></div>
       </div>
-      <div class="field"><label>${t('colHoliday')}</label><input id="n-holiday" type="number" value="${note.holiday||0}"/></div>
+      <div class="row2">
+        <div class="field"><label>${t('colHoliday')}</label><input id="n-holiday" type="number" value="${note.holiday||0}"/></div>
+        <div class="field"><label>${t('colSick')}</label><input id="n-sick" type="number" value="${note.sick||0}"/></div>
+      </div>
       <div style="display:flex;gap:10px;margin-top:8px;">
         <button class="btn btn-solid" id="n-save">${t('saveNote')}</button>
         <button class="btn" id="n-cancel">${t('cancel')}</button>
@@ -1662,6 +1668,7 @@ function openNoteModal(emp, month, note, onSaved){
       annual: Number(document.getElementById('n-annual').value)||0,
       unpaid: Number(document.getElementById('n-unpaid').value)||0,
       holiday: Number(document.getElementById('n-holiday').value)||0,
+      sick: Number(document.getElementById('n-sick').value)||0,
     };
     await saveNote(emp.id, month, updated);
     backdrop.remove();
@@ -2334,9 +2341,10 @@ async function renderMonthlyDataPage(main){
       const annual = Number(row.querySelector('input[data-annual]').value)||0;
       const unpaid = Number(row.querySelector('input[data-unpaid]').value)||0;
       const holiday = Number(row.querySelector('input[data-holiday]').value)||0;
+      const sick = Number(row.querySelector('input[data-sick]').value)||0;
       await saveTargetOverride(empId, monthSel.value, target);
       await saveApprovedHours(empId, monthSel.value, approved);
-      await saveNote(empId, monthSel.value, {annual, unpaid, holiday});
+      await saveNote(empId, monthSel.value, {annual, unpaid, holiday, sick});
     }
     toast(t('savedAll'));
   };
@@ -2358,7 +2366,7 @@ async function renderMonthlyDataPage(main){
       <thead><tr>
         <th>${t('thCode')}</th><th>${t('thEmployee')}</th><th>${t('thDept')}</th>
         <th>${t('thTargetHours')}</th><th>${t('thApprovedHours')}</th>
-        <th>${t('colAnnual')}</th><th>${t('colUnpaid')}</th><th>${t('colHoliday')}</th>
+        <th>${t('colAnnual')}</th><th>${t('colUnpaid')}</th><th>${t('colHoliday')}</th><th>${t('colSick')}</th>
       </tr></thead>
       <tbody>
       ${activeEmps.map(emp=>{
@@ -2366,7 +2374,7 @@ async function renderMonthlyDataPage(main){
         const targetOverride = targets[emp.id];
         const target = counts ? effectiveTarget(emp, targetOverride) : ((targetOverride===null||targetOverride===undefined) ? 0 : targetOverride);
         const approved = approvedMap[emp.id]===null || approvedMap[emp.id]===undefined ? '' : approvedMap[emp.id];
-        const note = notesMap[emp.id] || {annual:0,unpaid:0,holiday:0};
+        const note = notesMap[emp.id] || {annual:0,unpaid:0,holiday:0,sick:0};
         return `<tr data-emp="${emp.id}"${counts?'':' style="opacity:.6;"'}>
           <td class="mono">${emp.code||'—'}</td>
           <td>${emp.name}${resignedBadge(emp, month)}</td>
@@ -2376,8 +2384,9 @@ async function renderMonthlyDataPage(main){
           <td><input data-annual type="number" value="${note.annual||0}" style="width:60px;"/></td>
           <td><input data-unpaid type="number" value="${note.unpaid||0}" style="width:60px;"/></td>
           <td><input data-holiday type="number" value="${note.holiday||0}" style="width:60px;"/></td>
+          <td><input data-sick type="number" value="${note.sick||0}" style="width:60px;"/></td>
         </tr>`;
-      }).join('') || `<tr><td colspan="8"><div class="empty-state">${t('noDataMonth')}</div></td></tr>`}
+      }).join('') || `<tr><td colspan="9"><div class="empty-state">${t('noDataMonth')}</div></td></tr>`}
       </tbody>
     `;
   }
@@ -2422,7 +2431,7 @@ async function renderTeamApprovalPage(main){
       <thead><tr>
         <th>${t('thCode')}</th><th>${t('thEmployee')}</th><th>${t('thDept')}</th>
         <th>${t('thTargetHours')}</th><th>${t('thApprovedHours')}</th>
-        <th>${t('colAnnual')}</th><th>${t('colUnpaid')}</th><th>${t('colHoliday')}</th>
+        <th>${t('colAnnual')}</th><th>${t('colUnpaid')}</th><th>${t('colHoliday')}</th><th>${t('colSick')}</th>
         <th>${t('thApprovalStatus')}</th><th></th><th></th>
       </tr></thead>
       <tbody>
@@ -2430,7 +2439,7 @@ async function renderTeamApprovalPage(main){
         const counts = employeeCountsInMonth(emp, month);
         const target = counts ? effectiveTarget(emp, targets[emp.id]) : 0;
         const approved = (approvedMap[emp.id]===null || approvedMap[emp.id]===undefined) ? 0 : approvedMap[emp.id];
-        const note = notesMap[emp.id] || {annual:0, unpaid:0, holiday:0};
+        const note = notesMap[emp.id] || {annual:0, unpaid:0, holiday:0, sick:0};
         const appr = apprMap[emp.id] || {status:'pending'};
         return `<tr data-emp="${emp.id}"${counts?'':' style="opacity:.6;"'}>
           <td class="mono">${emp.code||'—'}</td>
@@ -2441,6 +2450,7 @@ async function renderTeamApprovalPage(main){
           <td class="mono">${fmt(note.annual)}</td>
           <td class="mono">${fmt(note.unpaid)}</td>
           <td class="mono">${fmt(note.holiday)}</td>
+          <td class="mono">${fmt(note.sick||0)}</td>
           <td>${approvalStatusBadge(appr.status)}</td>
           <td><button class="btn btn-sm ${appr.status==='pending'?'btn-solid':''}" data-toggle="${emp.id}">${appr.status==='pending' ? t('approveBtn') : t('revokeApprovalBtn')}</button></td>
           <td><button class="btn btn-sm" data-daily="${emp.id}">${t('dailyTasksBtn')}</button></td>
@@ -2894,7 +2904,7 @@ async function renderMyDashboard(main){
     const s = summarizeEntries(entries);
     const target = effectiveTarget(emp, targetOverride);
     const approvedHours = (approvedOverride===null || approvedOverride===undefined) ? s.total : approvedOverride;
-    return {target, approvedHours, annual: note.annual||0, unpaid: note.unpaid||0, holiday: note.holiday||0};
+    return {target, approvedHours, annual: note.annual||0, unpaid: note.unpaid||0, holiday: note.holiday||0, sick: note.sick||0};
   }
 
   async function draw(){
@@ -2907,13 +2917,14 @@ async function renderMyDashboard(main){
         <div class="stat-card"><div class="lbl">${t('colAnnual')}</div><div class="val mono">${fmt(m.annual)}</div></div>
         <div class="stat-card"><div class="lbl">${t('colUnpaid')}</div><div class="val mono">${fmt(m.unpaid)}</div></div>
         <div class="stat-card"><div class="lbl">${t('colHoliday')}</div><div class="val mono">${fmt(m.holiday)}</div></div>
+        <div class="stat-card"><div class="lbl">${t('colSick')}</div><div class="val mono">${fmt(m.sick)}</div></div>
       </div>
     `;
   }
 
   async function drawByMonthTable(){
     const tbl = document.getElementById('my-dash-table');
-    tbl.innerHTML = `<tr><td colspan="6"><div class="empty-state">${t('loading')}</div></td></tr>`;
+    tbl.innerHTML = `<tr><td colspan="7"><div class="empty-state">${t('loading')}</div></td></tr>`;
     const rows = [];
     for(const [v] of MONTHS){
       const m = await monthMetrics(v);
@@ -2927,6 +2938,7 @@ async function renderMyDashboard(main){
         <th>${t('colAnnual')}</th>
         <th>${t('colUnpaid')}</th>
         <th>${t('colHoliday')}</th>
+        <th>${t('colSick')}</th>
       </tr>
       ${rows.map(r=>`
         <tr>
@@ -2936,6 +2948,7 @@ async function renderMyDashboard(main){
           <td class="mono">${fmt(r.annual)}</td>
           <td class="mono">${fmt(r.unpaid)}</td>
           <td class="mono">${fmt(r.holiday)}</td>
+          <td class="mono">${fmt(r.sick)}</td>
         </tr>`).join('')}
     `;
   }
