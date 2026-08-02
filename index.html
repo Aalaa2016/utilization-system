@@ -397,6 +397,7 @@ const I18N = {
     dateOutOfMonth:'التاريخ لازم يكون داخل الشهر المختار في الأعلى:',
     chooseProject:'اختار مشروع',
     myDashTitle:'الطاقة الاستيعابية بتاعتي',
+    myDashByMonth:'التفاصيل شهر بشهر', thMonth:'الشهر',
     hoursDistribution:'توزيع الساعات هذا الشهر', attendanceRatio:'نسبة الحضور المعتمد مقابل المستهدف', approvedAttendance:'الحضور المعتمد',
     attendanceNote:'الفرق بين الساعات المسجلة والمستهدفة عادة بيعكس الإجازات الرسمية والسنوية. لو النسبة قليلة جدًا وملهاش سبب إجازة، راجع تسجيلك في التايم شيت.',
     utilTrend:'اتجاه الـ Utilization عبر الشهور',
@@ -532,6 +533,7 @@ const I18N = {
     dateOutOfMonth:'The date must be within the selected month above:',
     chooseProject:'Please select a project',
     myDashTitle:'My Utilization',
+    myDashByMonth:'Month by Month Breakdown', thMonth:'Month',
     hoursDistribution:'Hours Distribution This Month', attendanceRatio:'Approved Attendance vs Target', approvedAttendance:'Approved Attendance',
     attendanceNote:'The difference between logged and target hours usually reflects official and annual leave. If the ratio is too low with no leave reason, review your timesheet entries.',
     utilTrend:'Utilization Trend Over Months',
@@ -2870,22 +2872,71 @@ async function renderMyDashboard(main){
       <div class="panel-title">${t('utilTrend')}</div>
       <div class="chart-box"><canvas id="chart-trend"></canvas></div>
     </div>
+    <div class="panel">
+      <div class="panel-title">${t('myDashByMonth')}</div>
+      <table id="my-dash-table"></table>
+    </div>
   `;
   const monthSel = document.getElementById('d-month');
   monthSel.value = currentDefaultMonth();
   monthSel.onchange = draw;
   draw();
   drawTrend();
+  drawByMonthTable();
+
+  async function monthMetrics(month){
+    const [entries, targetOverride, approvedOverride, note] = await Promise.all([
+      loadTimesheet(emp.id, month),
+      loadTargetOverride(emp.id, month),
+      loadApprovedHours(emp.id, month),
+      loadNote(emp.id, month),
+    ]);
+    const s = summarizeEntries(entries);
+    const target = effectiveTarget(emp, targetOverride);
+    const approvedHours = (approvedOverride===null || approvedOverride===undefined) ? s.total : approvedOverride;
+    return {target, approvedHours, annual: note.annual||0, unpaid: note.unpaid||0, holiday: note.holiday||0};
+  }
 
   async function draw(){
-    const entries = await loadTimesheet(emp.id, monthSel.value);
-    const s = summarizeEntries(entries);
+    const m = await monthMetrics(monthSel.value);
     const body = document.getElementById('my-dash-body');
     body.innerHTML = `
       <div class="cards-row">
-        <div class="stat-card"><div class="lbl">Target Approved Hours</div><div class="val mono">${emp.targetHours}</div></div>
-        <div class="stat-card"><div class="lbl">Annual Unpaid Holiday</div><div class="val mono">${emp.annualUnpaidHoliday || '—'}</div></div>
+        <div class="stat-card"><div class="lbl">${t('thTargetHours')}</div><div class="val mono">${fmt(m.target)}</div></div>
+        <div class="stat-card"><div class="lbl">${t('thApprovedHours')}</div><div class="val mono">${fmt(m.approvedHours)}</div></div>
+        <div class="stat-card"><div class="lbl">${t('colAnnual')}</div><div class="val mono">${fmt(m.annual)}</div></div>
+        <div class="stat-card"><div class="lbl">${t('colUnpaid')}</div><div class="val mono">${fmt(m.unpaid)}</div></div>
+        <div class="stat-card"><div class="lbl">${t('colHoliday')}</div><div class="val mono">${fmt(m.holiday)}</div></div>
       </div>
+    `;
+  }
+
+  async function drawByMonthTable(){
+    const tbl = document.getElementById('my-dash-table');
+    tbl.innerHTML = `<tr><td colspan="6"><div class="empty-state">${t('loading')}</div></td></tr>`;
+    const rows = [];
+    for(const [v] of MONTHS){
+      const m = await monthMetrics(v);
+      rows.push({label: monthLabel(v), ...m});
+    }
+    tbl.innerHTML = `
+      <tr>
+        <th>${t('thMonth')}</th>
+        <th>${t('thTargetHours')}</th>
+        <th>${t('thApprovedHours')}</th>
+        <th>${t('colAnnual')}</th>
+        <th>${t('colUnpaid')}</th>
+        <th>${t('colHoliday')}</th>
+      </tr>
+      ${rows.map(r=>`
+        <tr>
+          <td>${r.label}</td>
+          <td class="mono">${fmt(r.target)}</td>
+          <td class="mono">${fmt(r.approvedHours)}</td>
+          <td class="mono">${fmt(r.annual)}</td>
+          <td class="mono">${fmt(r.unpaid)}</td>
+          <td class="mono">${fmt(r.holiday)}</td>
+        </tr>`).join('')}
     `;
   }
 
