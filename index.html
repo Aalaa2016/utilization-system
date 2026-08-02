@@ -318,6 +318,8 @@ const I18N = {
     capTitle:'لوحة تحكم الطاقة الإنتاجية والاستغلال الوظيفي', capSub:'اختر الموظف / القسم / الفترة الزمنية أدناه — كل الأرقام والجداول والرسومات تتحدث تلقائيًا',
     capFilterEmployee:'الموظف (Employee)', capFilterDept:'القسم (Department)', capFilterFrom:'من شهر (From)', capFilterTo:'إلى شهر (To)', capFilterProject:'المشروع - لتحليل المشاريع (Project)',
     capAll:'الكل', capChooseProject:'اختر مشروعًا لعرض تحليل التوزيع', capKpiSectionTitle:'📊 مؤشرات الطاقة الإجمالية (وفق الفلاتر أعلاه)',
+    capTabEmployees:'الموظفين', capTabProjects:'المشروعات', capAllProjects:'كل المشروعات',
+    capPrjCountLbl:'عدد المشروعات', capPrjUsedPctLbl:'٪ من الساعات المخططة المستخدمة',
     capKpiTarget:'الطاقة المستهدفة Target Capacity', capKpiAvailable:'الطاقة المتاحة (المسجلة) Available Capacity',
     capKpiAvailPct:'نسبة الطاقة المتاحة الى الطاقة المستهدفة', capKpiUnavailPct:'نسبة الطاقة الغير متاحة الى الطاقة المستهدفة',
     capKpiEffective:'الطاقة الفعّالة (المنتجة) Effective Capacity', capKpiEffPct:'نسبة الطاقة الفعالة الى الطاقة المتاحة',
@@ -369,6 +371,11 @@ const I18N = {
     prjPageTitle:'إدارة المشروعات', prjPageSub:'المشروعات المتاحة للمهندسين لتسجيل ساعاتهم عليها',
     addPrj:'+ إضافة مشروع', thPrjName:'اسم المشروع', closed:'مغلق', noPrj:'مفيش مشروعات مضافة',
     confirmDeletePrj:'متأكد من حذف', addPrjTitle:'إضافة مشروع', editPrjTitle:'تعديل مشروع', prjCode:'كود المشروع',
+    prjClient:'العميل', prjLocation:'الموقع', prjStartDate:'تاريخ البداية', prjPlannedDuration:'المدة المخططة',
+    unitDays:'أيام', unitWeeks:'أسابيع', unitMonths:'شهور',
+    prjScope:'نطاق العمل (Scope)', prjDescription:'وصف المشروع',
+    prjLead:'Project Lead', prjStructuralLead:'Structural Lead', prjProgress:'نسبة الإنجاز',
+    prjPlannedManHours:'إجمالي الساعات المخططة (Man Hours)', prjPlannedManHoursByDept:'الساعات المخططة لكل قسم',
     enterPrjName:'أدخل اسم المشروع',
     adminDashTitle:'لوحة التحكم — الطاقة الاستيعابية', adminDashSub:'نظرة عامة على استخدام الطاقة الاستيعابية للموظفين والأقسام والمشروعات',
     loadingData:'جارِ تحميل البيانات...', loading:'جارِ التحميل...',
@@ -457,6 +464,8 @@ const I18N = {
     capTitle:'Utilization & Capacity Dashboard', capSub:'Choose the employee / department / period below — all figures, tables and charts update automatically',
     capFilterEmployee:'Employee', capFilterDept:'Department', capFilterFrom:'From Month', capFilterTo:'To Month', capFilterProject:'Project - for Project Analysis',
     capAll:'All', capChooseProject:'Choose a project to view the distribution analysis', capKpiSectionTitle:'📊 Overall Capacity KPIs (per filters above)',
+    capTabEmployees:'Employees', capTabProjects:'Projects', capAllProjects:'All Projects',
+    capPrjCountLbl:'Number of Projects', capPrjUsedPctLbl:'% of Planned Hours Used',
     capKpiTarget:'Target Capacity', capKpiAvailable:'Available (Logged) Capacity',
     capKpiAvailPct:'Available / Target Capacity Ratio', capKpiUnavailPct:'Unavailable / Target Capacity Ratio',
     capKpiEffective:'Effective (Productive) Capacity', capKpiEffPct:'Effective / Available Capacity Ratio',
@@ -508,6 +517,11 @@ const I18N = {
     prjPageTitle:'Project Management', prjPageSub:'Projects available for engineers to log their hours against',
     addPrj:'+ Add Project', thPrjName:'Project Name', closed:'Closed', noPrj:'No projects added',
     confirmDeletePrj:'Are you sure you want to delete', addPrjTitle:'Add Project', editPrjTitle:'Edit Project', prjCode:'Project Code',
+    prjClient:'Client', prjLocation:'Location', prjStartDate:'Start Date', prjPlannedDuration:'Planned Duration',
+    unitDays:'Days', unitWeeks:'Weeks', unitMonths:'Months',
+    prjScope:'Scope', prjDescription:'Project Description',
+    prjLead:'Project Lead', prjStructuralLead:'Structural Lead', prjProgress:'Progress',
+    prjPlannedManHours:'Planned Man Hours (Total)', prjPlannedManHoursByDept:'Planned Man Hours by Department',
     enterPrjName:'Enter the project name',
     adminDashTitle:'Dashboard — Utilization', adminDashSub:'Overview of utilization for employees, departments, and projects',
     loadingData:'Loading data...', loading:'Loading...',
@@ -1338,24 +1352,27 @@ function renderProjectsPage(main){
     <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
       <button class="btn btn-solid btn-sm" id="add-prj">${t('addPrj')}</button>
     </div>
-    <div class="panel"><table id="prj-table"></table></div>
+    <div class="panel"><div class="util-table-wrap"><table id="prj-table" class="util-emp-table"></table></div></div>
   `;
   document.getElementById('add-prj').onclick = ()=>openProjectModal(null);
   drawPrjTable();
   function drawPrjTable(){
     const tbl = document.getElementById('prj-table');
     tbl.innerHTML = `
-      <tr><th>${t('thCode')}</th><th>${t('thPrjName')}</th><th>${t('thStatus')}</th><th></th></tr>
+      <tr><th>${t('thCode')}</th><th>${t('thPrjName')}</th><th>${t('prjClient')}</th><th>${t('prjLocation')}</th><th>${t('thStatus')}</th><th>${t('prjProgress')}</th><th></th></tr>
       ${state.projects.map(p=>`
         <tr>
           <td class="mono">${p.code}</td>
           <td>${p.name}</td>
+          <td>${p.client||'—'}</td>
+          <td>${p.location||'—'}</td>
           <td>${p.status==='active'?`<span style="color:var(--green)">${t('statusActive')}</span>`:`<span style="color:var(--muted)">${t('closed')}</span>`}</td>
+          <td class="mono">${p.progress!==undefined && p.progress!==null && p.progress!=='' ? p.progress+'%' : '—'}</td>
           <td>
             <button class="icon-btn" data-p="${p.id}" data-a="edit">${t('edit')}</button>
             <button class="icon-btn" data-p="${p.id}" data-a="del" style="color:var(--rose)">${t('del')}</button>
           </td>
-        </tr>`).join('') || `<tr><td colspan="4"><div class="empty-state">${t('noPrj')}</div></td></tr>`}
+        </tr>`).join('') || `<tr><td colspan="7"><div class="empty-state">${t('noPrj')}</div></td></tr>`}
     `;
     tbl.querySelectorAll('.icon-btn').forEach(b=>{
       b.onclick = async ()=>{
@@ -1374,17 +1391,60 @@ function renderProjectsPage(main){
 }
 function openProjectModal(prj){
   const isNew = !prj;
-  prj = prj || {id:uid('prj'), code:'', name:'', status:'active'};
+  prj = prj || {id:uid('prj'), code:'', name:'', status:'active', client:'', location:'', startDate:'',
+    plannedDuration:'', plannedDurationUnit:'months', scope:'', description:'', plannedManHours:'',
+    plannedManHoursByDept:{}, projectLead:'', structuralLead:'', progress:''};
+  const byDept = prj.plannedManHoursByDept || {};
   const backdrop = document.createElement('div');
   backdrop.className='modal-backdrop';
   backdrop.innerHTML = `
-    <div class="modal">
+    <div class="modal" style="width:640px;">
       <h3>${isNew?t('addPrjTitle'):t('editPrjTitle')}</h3>
-      <div class="field"><label>${t('prjCode')}</label><input id="p-code" value="${prj.code}"/></div>
-      <div class="field"><label>${t('thPrjName')}</label><input id="p-name" value="${prj.name}"/></div>
-      <div class="field"><label>${t('status')}</label>
-        <select id="p-status"><option value="active" ${prj.status==='active'?'selected':''}>${t('statusActive')}</option><option value="closed" ${prj.status==='closed'?'selected':''}>${t('closed')}</option></select>
+      <div class="row2">
+        <div class="field"><label>${t('prjCode')}</label><input id="p-code" value="${prj.code}"/></div>
+        <div class="field"><label>${t('status')}</label>
+          <select id="p-status"><option value="active" ${prj.status==='active'?'selected':''}>${t('statusActive')}</option><option value="closed" ${prj.status==='closed'?'selected':''}>${t('closed')}</option></select>
+        </div>
       </div>
+      <div class="field"><label>${t('thPrjName')}</label><input id="p-name" value="${prj.name}"/></div>
+      <div class="row2">
+        <div class="field"><label>${t('prjClient')}</label><input id="p-client" value="${prj.client||''}"/></div>
+        <div class="field"><label>${t('prjLocation')}</label><input id="p-location" value="${prj.location||''}"/></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>${t('prjStartDate')}</label><input id="p-start" type="date" value="${prj.startDate||''}"/></div>
+        <div class="field"><label>${t('prjPlannedDuration')}</label>
+          <div style="display:flex;gap:6px;">
+            <input id="p-duration" type="number" value="${prj.plannedDuration||''}" style="flex:1;"/>
+            <select id="p-duration-unit" style="width:110px;">
+              <option value="days" ${prj.plannedDurationUnit==='days'?'selected':''}>${t('unitDays')}</option>
+              <option value="weeks" ${prj.plannedDurationUnit==='weeks'?'selected':''}>${t('unitWeeks')}</option>
+              <option value="months" ${(!prj.plannedDurationUnit||prj.plannedDurationUnit==='months')?'selected':''}>${t('unitMonths')}</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="field"><label>${t('prjScope')}</label><textarea id="p-scope" rows="2" style="width:100%;">${prj.scope||''}</textarea></div>
+      <div class="field"><label>${t('prjDescription')}</label><textarea id="p-desc" rows="3" style="width:100%;">${prj.description||''}</textarea></div>
+      <div class="row2">
+        <div class="field"><label>${t('prjLead')}</label><input id="p-lead" value="${prj.projectLead||''}"/></div>
+        <div class="field"><label>${t('prjStructuralLead')}</label><input id="p-struct-lead" value="${prj.structuralLead||''}"/></div>
+      </div>
+      <div class="field"><label>${t('prjProgress')} (%)</label><input id="p-progress" type="number" min="0" max="100" value="${prj.progress!==undefined&&prj.progress!==null?prj.progress:''}"/></div>
+
+      <div class="field">
+        <label>${t('prjPlannedManHours')}</label>
+        <input id="p-mh-total" type="number" value="${prj.plannedManHours||''}"/>
+      </div>
+      <div class="panel-title" style="margin-top:10px;">${t('prjPlannedManHoursByDept')}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;margin-bottom:10px;">
+        ${DEPARTMENTS.map(d=>`
+          <div class="field" style="margin:0;">
+            <label style="font-size:11px;">${deptName(d.id)}</label>
+            <input data-dept-hours="${d.id}" type="number" value="${byDept[d.id]||''}" style="width:100%;"/>
+          </div>`).join('')}
+      </div>
+
       <div style="display:flex;gap:10px;margin-top:8px;">
         <button class="btn btn-solid" id="p-save">${t('save')}</button>
         <button class="btn" id="p-cancel">${t('cancel')}</button>
@@ -1395,7 +1455,29 @@ function openProjectModal(prj){
   document.getElementById('p-save').onclick = async ()=>{
     const name = document.getElementById('p-name').value.trim();
     if(!name){ alert(t('enterPrjName')); return; }
-    const updated = {...prj, code:document.getElementById('p-code').value.trim()||('PRJ-'+Math.floor(Math.random()*900+100)), name, status:document.getElementById('p-status').value};
+    const plannedManHoursByDept = {};
+    backdrop.querySelectorAll('input[data-dept-hours]').forEach(inp=>{
+      const v = Number(inp.value);
+      if(v) plannedManHoursByDept[inp.getAttribute('data-dept-hours')] = v;
+    });
+    const updated = {
+      ...prj,
+      code: document.getElementById('p-code').value.trim()||('PRJ-'+Math.floor(Math.random()*900+100)),
+      name,
+      status: document.getElementById('p-status').value,
+      client: document.getElementById('p-client').value.trim(),
+      location: document.getElementById('p-location').value.trim(),
+      startDate: document.getElementById('p-start').value,
+      plannedDuration: document.getElementById('p-duration').value ? Number(document.getElementById('p-duration').value) : '',
+      plannedDurationUnit: document.getElementById('p-duration-unit').value,
+      scope: document.getElementById('p-scope').value.trim(),
+      description: document.getElementById('p-desc').value.trim(),
+      projectLead: document.getElementById('p-lead').value.trim(),
+      structuralLead: document.getElementById('p-struct-lead').value.trim(),
+      progress: document.getElementById('p-progress').value!=='' ? Number(document.getElementById('p-progress').value) : '',
+      plannedManHours: document.getElementById('p-mh-total').value ? Number(document.getElementById('p-mh-total').value) : '',
+      plannedManHoursByDept,
+    };
     const idx = state.projects.findIndex(x=>x.id===prj.id);
     if(idx>=0) state.projects[idx]=updated; else state.projects.push(updated);
     await saveJSON('projects', true, state.projects);
@@ -1703,9 +1785,25 @@ function currentDefaultMonth(){
 
 /* ============================= ADMIN: UTILIZATION & CAPACITY DASHBOARD ============================= */
 async function renderCapacityDashboard(main){
+  state.capTab = state.capTab || 'employees';
   main.innerHTML = `
     <h2 class="page-title">📊 ${t('capTitle')}</h2>
     <p class="page-sub">🔍 ${t('capSub')}</p>
+    <div class="filters-row" style="margin-bottom:0;">
+      <button class="btn ${state.capTab==='employees'?'btn-solid':''}" id="cap-tab-emp">👤 ${t('capTabEmployees')}</button>
+      <button class="btn ${state.capTab==='projects'?'btn-solid':''}" id="cap-tab-prj">📁 ${t('capTabProjects')}</button>
+    </div>
+    <div id="cap-tab-body"></div>
+  `;
+  document.getElementById('cap-tab-emp').onclick = ()=>{ state.capTab='employees'; renderCapacityDashboard(main); };
+  document.getElementById('cap-tab-prj').onclick = ()=>{ state.capTab='projects'; renderCapacityDashboard(main); };
+  const tabBody = document.getElementById('cap-tab-body');
+  if(state.capTab==='projects') renderCapProjectsView(tabBody);
+  else renderCapEmployeesView(tabBody);
+}
+
+async function renderCapEmployeesView(main){
+  main.innerHTML = `
     <div class="panel">
       <div class="filters-row">
         <div>
@@ -1725,10 +1823,6 @@ async function renderCapacityDashboard(main){
           <select id="cap-to">${MONTHS.map(([v])=>`<option value="${v}">${monthLabel(v)}</option>`).join('')}</select>
         </div>
         <div>
-          <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px;">${t('capFilterProject')}</label>
-          <select id="cap-prj"><option value="">${t('capAll')}</option>${state.projects.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select>
-        </div>
-        <div>
           <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px;">&nbsp;</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);height:34px;"><input type="checkbox" id="cap-show-resigned"/> ${t('showResigned')}</label>
         </div>
@@ -1740,21 +1834,19 @@ async function renderCapacityDashboard(main){
   const deptSel = document.getElementById('cap-dept');
   const fromSel = document.getElementById('cap-from');
   const toSel = document.getElementById('cap-to');
-  const prjSel = document.getElementById('cap-prj');
   const showResignedChk = document.getElementById('cap-show-resigned');
   const defMonth = currentDefaultMonth();
   fromSel.value = MONTHS[0][0];
   toSel.value = defMonth;
   function rebuildEmpFilterOptions(){
     const prev = empSel.value;
-    const list = state.employees.filter(e=> showResignedChk.checked || employeeCountsInMonth(e, toSel.value))
+    const list = state.employees.filter(e=> showResignedChk.checked || !e.resignDate)
       .slice().sort((a,b)=> (a.name||'').localeCompare(b.name||''));
     empSel.innerHTML = `<option value="">${t('capAll')}</option>` + list.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
     if(list.some(e=>e.id===prev)) empSel.value = prev;
   }
   rebuildEmpFilterOptions();
-  [deptSel,fromSel,prjSel].forEach(s=>s.onchange=draw);
-  toSel.onchange = ()=>{ rebuildEmpFilterOptions(); draw(); };
+  [deptSel,fromSel,toSel].forEach(s=>s.onchange=draw);
   showResignedChk.onchange = ()=>{ rebuildEmpFilterOptions(); draw(); };
   empSel.onchange = draw;
   draw();
@@ -1772,14 +1864,13 @@ async function renderCapacityDashboard(main){
 
     const empFilter = empSel.value;
     const deptFilter = deptSel.value;
-    const prjFilter = prjSel.value;
     const showResigned = showResignedChk.checked;
     const lastMonthInRange = monthsRange[monthsRange.length-1];
     const employees = state.employees.filter(e=>
       (!empFilter || e.id===empFilter)
       && (!deptFilter || e.department===deptFilter)
       && employeeActiveInMonth(e, lastMonthInRange)
-      && (showResigned || employeeCountsInMonth(e, lastMonthInRange)));
+      && (showResigned || !e.resignDate));
     const empIds = employees.map(e=>e.id);
 
     // aggregate target/available/effective/training/idle per employee across the month range
@@ -1834,31 +1925,6 @@ async function renderCapacityDashboard(main){
     });
     const deptRows = Object.entries(deptAgg).filter(([,v])=> v.target>0 || v.available>0);
 
-    // project distribution across departments (for selected project)
-    let prjDeptRows = [];
-    let prjTotalHours = 0;
-    let prjTotalCost = 0;
-    if(prjFilter){
-      const prjAgg = {};
-      for(const month of monthsRange){
-        const allEntries = await loadAllTimesheetsForMonth(month);
-        state.employees.filter(e=>employeeCountsInMonth(e, month)).forEach(e=>{
-          const entries = allEntries[e.id] || [];
-          entries.forEach(en=>{
-            if(en.type==='project' && en.projectId===prjFilter){
-              const rate = rateAt(e, en.date);
-              if(!prjAgg[e.department]) prjAgg[e.department] = {hours:0, cost:0};
-              prjAgg[e.department].hours += en.hours;
-              prjAgg[e.department].cost += en.hours*rate;
-              prjTotalHours += en.hours;
-              prjTotalCost += en.hours*rate;
-            }
-          });
-        });
-      }
-      prjDeptRows = Object.entries(prjAgg);
-    }
-
     const pctCell = (v)=>`<td class="mono grp-util" style="background:${utilColor(v)}22;color:${utilColor(v)}">${fmt(v)}%</td>`;
 
     body.innerHTML = `
@@ -1887,11 +1953,6 @@ async function renderCapacityDashboard(main){
       <div class="panel">
         <div class="panel-title">${t('capByDeptTitle')}</div>
         <div class="util-table-wrap"><table id="cap-dept-table" class="util-emp-table"></table></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-title">${t('capByPrjTitle')}</div>
-        ${prjFilter ? `<div class="util-table-wrap"><table id="cap-prj-table" class="util-emp-table"></table></div>` : `<div class="empty-state">${t('capChooseProject')}</div>`}
       </div>
     `;
 
@@ -1968,29 +2029,164 @@ async function renderCapacityDashboard(main){
       </tr>
       </tbody>
     `;
+  }
+}
 
-    // project table
-    if(prjFilter){
-      const prjTbl = document.getElementById('cap-prj-table');
-      prjTbl.innerHTML = `
-        <thead><tr><th>${t('thDept')}</th><th>${t('capThDeptHours')}</th><th>${t('capThDeptPct')}</th><th>${t('capThCost')}</th></tr></thead>
+async function renderCapProjectsView(main){
+  main.innerHTML = `
+    <div class="panel">
+      <div class="filters-row">
+        <div>
+          <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px;">${t('capFilterProject')}</label>
+          <select id="cap-prj"><option value="">${t('capAllProjects')}</option>${state.projects.map(p=>`<option value="${p.id}">${p.code?p.code+' — ':''}${p.name}</option>`).join('')}</select>
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px;">${t('capFilterFrom')}</label>
+          <select id="cap-from">${MONTHS.map(([v])=>`<option value="${v}">${monthLabel(v)}</option>`).join('')}</select>
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px;">${t('capFilterTo')}</label>
+          <select id="cap-to">${MONTHS.map(([v])=>`<option value="${v}">${monthLabel(v)}</option>`).join('')}</select>
+        </div>
+      </div>
+    </div>
+    <div id="cap-prj-body"><div class="empty-state">${t('loadingData')}</div></div>
+  `;
+  const prjSel = document.getElementById('cap-prj');
+  const fromSel = document.getElementById('cap-from');
+  const toSel = document.getElementById('cap-to');
+  fromSel.value = MONTHS[0][0];
+  toSel.value = currentDefaultMonth();
+  [prjSel,fromSel,toSel].forEach(s=>s.onchange=draw);
+  draw();
+
+  async function draw(){
+    const body = document.getElementById('cap-prj-body');
+    body.innerHTML = `<div class="empty-state">${t('loading')}</div>`;
+
+    let fromIdx = MONTHS.findIndex(([v])=>v===fromSel.value);
+    let toIdx = MONTHS.findIndex(([v])=>v===toSel.value);
+    if(fromIdx<0) fromIdx=0; if(toIdx<0) toIdx=MONTHS.length-1;
+    if(fromIdx>toIdx){ const tmp=fromIdx; fromIdx=toIdx; toIdx=tmp; }
+    const monthsRange = MONTHS.slice(fromIdx, toIdx+1).map(m=>m[0]);
+    const prjFilter = prjSel.value;
+
+    // aggregate hours/cost per project (and per project+department) across the range
+    const perPrjAgg = {};
+    state.projects.forEach(p=>{ perPrjAgg[p.id] = {prj:p, hours:0, cost:0, byDept:{}}; });
+    for(const month of monthsRange){
+      const allEntries = await loadAllTimesheetsForMonth(month);
+      state.employees.filter(e=>employeeCountsInMonth(e, month)).forEach(e=>{
+        const entries = allEntries[e.id] || [];
+        entries.forEach(en=>{
+          if(en.type==='project' && en.projectId && perPrjAgg[en.projectId]){
+            const rate = rateAt(e, en.date);
+            const agg = perPrjAgg[en.projectId];
+            agg.hours += en.hours;
+            agg.cost += en.hours*rate;
+            if(!agg.byDept[e.department]) agg.byDept[e.department] = {hours:0, cost:0};
+            agg.byDept[e.department].hours += en.hours;
+            agg.byDept[e.department].cost += en.hours*rate;
+          }
+        });
+      });
+    }
+
+    if(!prjFilter){
+      // All projects summary table
+      const rows = Object.values(perPrjAgg);
+      const totalHours = rows.reduce((a,r)=>a+r.hours,0);
+      const totalCost = rows.reduce((a,r)=>a+r.cost,0);
+      body.innerHTML = `
+        <div class="panel">
+          <div class="cards-row">
+            <div class="stat-card"><div class="lbl">${t('capPrjCountLbl')}</div><div class="val mono">${state.projects.length}</div></div>
+            <div class="stat-card"><div class="lbl">${t('capThDeptHours')}</div><div class="val mono">${fmt(totalHours)}</div></div>
+            <div class="stat-card"><div class="lbl">${t('totalLaborCostLbl')}</div><div class="val mono">${fmt(totalCost)}</div></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">${t('capByPrjTitle')}</div>
+          <div class="util-table-wrap"><table id="cap-allprj-table" class="util-emp-table"></table></div>
+        </div>
+      `;
+      const tbl = document.getElementById('cap-allprj-table');
+      tbl.innerHTML = `
+        <thead><tr>
+          <th>${t('thCode')}</th><th>${t('thPrjName')}</th><th>${t('prjClient')}</th><th>${t('thStatus')}</th>
+          <th>${t('prjProgress')}</th><th>${t('prjPlannedManHours')}</th><th>${t('capThDeptHours')}</th><th>${t('capThCost')}</th>
+        </tr></thead>
         <tbody>
-        ${prjDeptRows.map(([id,v])=>`
+        ${rows.map(r=>`
           <tr>
-            <td><span class="badge" style="background:${deptOf(id).color}22;color:${deptOf(id).color}">${deptName(id)}</span></td>
-            <td class="mono">${fmt(v.hours)}</td>
-            <td class="mono">${fmt(prjTotalHours ? v.hours/prjTotalHours*100 : 0)}%</td>
-            <td class="mono">${fmt(v.cost)}</td>
-          </tr>`).join('') || `<tr><td colspan="4"><div class="empty-state">${t('noDataMonth')}</div></td></tr>`}
+            <td class="mono">${r.prj.code||'—'}</td>
+            <td>${r.prj.name}</td>
+            <td>${r.prj.client||'—'}</td>
+            <td>${r.prj.status==='active'?`<span style="color:var(--green)">${t('statusActive')}</span>`:`<span style="color:var(--muted)">${t('closed')}</span>`}</td>
+            <td class="mono">${r.prj.progress!==undefined&&r.prj.progress!==null&&r.prj.progress!==''?r.prj.progress+'%':'—'}</td>
+            <td class="mono">${r.prj.plannedManHours||'—'}</td>
+            <td class="mono">${fmt(r.hours)}</td>
+            <td class="mono">${fmt(r.cost)}</td>
+          </tr>`).join('') || `<tr><td colspan="8"><div class="empty-state">${t('noPrj')}</div></td></tr>`}
         <tr style="font-weight:700;">
-          <td>${t('capThTotal')}</td>
-          <td class="mono">${fmt(prjTotalHours)}</td>
-          <td class="mono">100%</td>
-          <td class="mono">${fmt(prjTotalCost)}</td>
+          <td colspan="6">${t('capThTotal')}</td>
+          <td class="mono">${fmt(totalHours)}</td>
+          <td class="mono">${fmt(totalCost)}</td>
         </tr>
         </tbody>
       `;
+      return;
     }
+
+    // single project drill-down
+    const agg = perPrjAgg[prjFilter];
+    const prj = agg.prj;
+    const plannedTotal = Number(prj.plannedManHours)||0;
+    const usedPct = plannedTotal ? (agg.hours/plannedTotal*100) : 0;
+    body.innerHTML = `
+      <div class="panel">
+        <div class="panel-title">${prj.code?prj.code+' — ':''}${prj.name}</div>
+        <div class="cards-row">
+          <div class="stat-card"><div class="lbl">${t('prjClient')}</div><div class="val" style="font-size:15px;">${prj.client||'—'}</div></div>
+          <div class="stat-card"><div class="lbl">${t('prjLocation')}</div><div class="val" style="font-size:15px;">${prj.location||'—'}</div></div>
+          <div class="stat-card"><div class="lbl">${t('prjLead')}</div><div class="val" style="font-size:15px;">${prj.projectLead||'—'}</div></div>
+          <div class="stat-card"><div class="lbl">${t('prjStructuralLead')}</div><div class="val" style="font-size:15px;">${prj.structuralLead||'—'}</div></div>
+          <div class="stat-card"><div class="lbl">${t('prjProgress')}</div><div class="val mono">${prj.progress!==undefined&&prj.progress!==null&&prj.progress!==''?prj.progress+'%':'—'}</div></div>
+          <div class="stat-card"><div class="lbl">${t('prjPlannedManHours')}</div><div class="val mono">${plannedTotal||'—'}</div></div>
+          <div class="stat-card"><div class="lbl">${t('capThDeptHours')}</div><div class="val mono">${fmt(agg.hours)}</div></div>
+          <div class="stat-card"><div class="lbl">${t('capPrjUsedPctLbl')}</div><div class="val mono" style="color:${utilColor(usedPct)}">${plannedTotal?fmt(usedPct)+'%':'—'}</div></div>
+          <div class="stat-card"><div class="lbl">${t('capThCost')}</div><div class="val mono">${fmt(agg.cost)}</div></div>
+        </div>
+        ${prj.scope ? `<div style="margin-top:12px;font-size:12.5px;"><b>${t('prjScope')}:</b> ${prj.scope}</div>` : ''}
+        ${prj.description ? `<div style="margin-top:6px;font-size:12.5px;"><b>${t('prjDescription')}:</b> ${prj.description}</div>` : ''}
+      </div>
+      <div class="panel">
+        <div class="panel-title">${t('capByPrjTitle')} — ${t('prjPlannedManHoursByDept')}</div>
+        <div class="util-table-wrap"><table id="cap-prj-table" class="util-emp-table"></table></div>
+      </div>
+    `;
+    const prjDeptRows = Object.entries(agg.byDept);
+    const prjTbl = document.getElementById('cap-prj-table');
+    prjTbl.innerHTML = `
+      <thead><tr><th>${t('thDept')}</th><th>${t('prjPlannedManHoursByDept')}</th><th>${t('capThDeptHours')}</th><th>${t('capThDeptPct')}</th><th>${t('capThCost')}</th></tr></thead>
+      <tbody>
+      ${prjDeptRows.map(([id,v])=>`
+        <tr>
+          <td><span class="badge" style="background:${deptOf(id).color}22;color:${deptOf(id).color}">${deptName(id)}</span></td>
+          <td class="mono">${(prj.plannedManHoursByDept||{})[id] || '—'}</td>
+          <td class="mono">${fmt(v.hours)}</td>
+          <td class="mono">${fmt(agg.hours ? v.hours/agg.hours*100 : 0)}%</td>
+          <td class="mono">${fmt(v.cost)}</td>
+        </tr>`).join('') || `<tr><td colspan="5"><div class="empty-state">${t('noDataMonth')}</div></td></tr>`}
+      <tr style="font-weight:700;">
+        <td>${t('capThTotal')}</td>
+        <td class="mono">${plannedTotal||'—'}</td>
+        <td class="mono">${fmt(agg.hours)}</td>
+        <td class="mono">100%</td>
+        <td class="mono">${fmt(agg.cost)}</td>
+      </tr>
+      </tbody>
+    `;
   }
 }
 
