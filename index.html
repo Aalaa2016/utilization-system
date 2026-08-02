@@ -339,7 +339,7 @@ const I18N = {
     managerApprovedToast:'تم اعتماد بيانات الموظف', managerApprovalRevokedToast:'تم إلغاء الاعتماد',
     lockedNote:'🔒 مقفول — إلغاء الاعتماد بس من الـ GM أو الأدمن',
     tsLockedNote:'🔒 التايم شيت بتاع الشهر ده معتمد ومقفول. لأي تعديل لازم يتم إلغاء الاعتماد من الـ GM أو الأدمن.',
-    gmApprovedToast:'تم الاعتماد النهائي', gmApprovalRevokedToast:'تم إلغاء الاعتماد النهائي',
+    gmApprovedToast:'تم الاعتماد النهائي', gmApprovalRevokedToast:'تم إلغاء الاعتماد، ورجعت للمدير المباشر للمراجعة',
     empPageTitle:'إدارة الموظفين', empPageSub:'إضافة، تعديل، وإدارة حالة المهندسين في كل الأقسام',
     allDepts:'كل الأقسام', allStatuses:'كل الحالات', statusActive:'نشط', statusResigned:'مستقيل',
     resetDemo:'استرجاع بيانات تجريبية', addEmp:'+ إضافة موظف',
@@ -478,7 +478,7 @@ const I18N = {
     managerApprovedToast:'Employee data approved', managerApprovalRevokedToast:'Approval revoked',
     lockedNote:'🔒 Locked — only GM or Admin can revoke',
     tsLockedNote:'🔒 This month timesheet is approved and locked. Contact GM or Admin to make changes.',
-    gmApprovedToast:'Final approval granted', gmApprovalRevokedToast:'Final approval revoked',
+    gmApprovedToast:'Final approval granted', gmApprovalRevokedToast:'Approval revoked — sent back to manager for review',
     empPageTitle:'Employee Management', empPageSub:'Add, edit, and manage the status of engineers across all departments',
     allDepts:'All Departments', allStatuses:'All Statuses', statusActive:'Active', statusResigned:'Resigned',
     resetDemo:'Restore Demo Data', addEmp:'+ Add Employee',
@@ -2626,8 +2626,8 @@ async function renderGmApprovalsPage(main){
         const empId = btn.getAttribute('data-gm-toggle');
         const appr = await loadDataApproval(empId, month);
         const next = appr.status==='manager_approved'
-          ? {...appr, status:'gm_approved', gmApprovedBy:state.currentUser.name, gmApprovedAt:new Date().toISOString()}
-          : {...appr, status:'manager_approved', gmApprovedBy:null, gmApprovedAt:null};
+          ? {status:'gm_approved', managerApprovedBy:appr.managerApprovedBy, managerApprovedAt:appr.managerApprovedAt, gmApprovedBy:state.currentUser.name, gmApprovedAt:new Date().toISOString()}
+          : {status:'pending'};
         await saveDataApproval(empId, month, next);
         toast(next.status==='gm_approved' ? t('gmApprovedToast') : t('gmApprovalRevokedToast'));
         draw();
