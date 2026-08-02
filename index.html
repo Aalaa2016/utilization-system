@@ -337,6 +337,8 @@ const I18N = {
     apprPending:'قيد المراجعة', apprManagerApproved:'معتمد من المدير المباشر', apprGmApproved:'معتمد نهائيًا',
     approveBtn:'اعتماد', revokeApprovalBtn:'إلغاء الاعتماد', gmApproveBtn:'اعتماد نهائي',
     managerApprovedToast:'تم اعتماد بيانات الموظف', managerApprovalRevokedToast:'تم إلغاء الاعتماد',
+    lockedNote:'🔒 مقفول — إلغاء الاعتماد بس من الـ GM أو الأدمن',
+    tsLockedNote:'🔒 التايم شيت بتاع الشهر ده معتمد ومقفول. لأي تعديل لازم يتم إلغاء الاعتماد من الـ GM أو الأدمن.',
     gmApprovedToast:'تم الاعتماد النهائي', gmApprovalRevokedToast:'تم إلغاء الاعتماد النهائي',
     empPageTitle:'إدارة الموظفين', empPageSub:'إضافة، تعديل، وإدارة حالة المهندسين في كل الأقسام',
     allDepts:'كل الأقسام', allStatuses:'كل الحالات', statusActive:'نشط', statusResigned:'مستقيل',
@@ -474,6 +476,8 @@ const I18N = {
     apprPending:'Pending Review', apprManagerApproved:'Approved by Manager', apprGmApproved:'Final Approved',
     approveBtn:'Approve', revokeApprovalBtn:'Revoke Approval', gmApproveBtn:'Final Approve',
     managerApprovedToast:'Employee data approved', managerApprovalRevokedToast:'Approval revoked',
+    lockedNote:'🔒 Locked — only GM or Admin can revoke',
+    tsLockedNote:'🔒 This month timesheet is approved and locked. Contact GM or Admin to make changes.',
     gmApprovedToast:'Final approval granted', gmApprovalRevokedToast:'Final approval revoked',
     empPageTitle:'Employee Management', empPageSub:'Add, edit, and manage the status of engineers across all departments',
     allDepts:'All Departments', allStatuses:'All Statuses', statusActive:'Active', statusResigned:'Resigned',
@@ -2358,10 +2362,11 @@ async function renderMonthlyDataPage(main){
     const month = monthSel.value;
     const deptFilter = deptSel.value;
     const activeEmps = state.employees.filter(e=>(!deptFilter || e.department===deptFilter) && employeeActiveInMonth(e, month) && (showResignedChk.checked || employeeCountsInMonth(e, month)));
-    const [targets, approvedMap, notesMap] = await Promise.all([
+    const [targets, approvedMap, notesMap, apprMap] = await Promise.all([
       loadAllTargetsForMonth(activeEmps.map(e=>e.id), month),
       loadAllApprovedForMonth(activeEmps.map(e=>e.id), month),
       loadAllNotesForMonth(activeEmps.map(e=>e.id), month),
+      loadAllDataApprovalsForMonth(activeEmps.map(e=>e.id), month),
     ]);
     const tbl = document.getElementById('md-table');
     tbl.innerHTML = `
@@ -2369,6 +2374,7 @@ async function renderMonthlyDataPage(main){
         <th>${t('thCode')}</th><th>${t('thEmployee')}</th><th>${t('thDept')}</th>
         <th>${t('thTargetHours')}</th><th>${t('thApprovedHours')}</th>
         <th>${t('colAnnual')}</th><th>${t('colUnpaid')}</th><th>${t('colHoliday')}</th><th>${t('colSick')}</th>
+        <th>${t('thApprovalStatus')}</th><th></th>
       </tr></thead>
       <tbody>
       ${activeEmps.map(emp=>{
@@ -2377,6 +2383,7 @@ async function renderMonthlyDataPage(main){
         const target = counts ? effectiveTarget(emp, targetOverride) : ((targetOverride===null||targetOverride===undefined) ? 0 : targetOverride);
         const approved = approvedMap[emp.id]===null || approvedMap[emp.id]===undefined ? '' : approvedMap[emp.id];
         const note = notesMap[emp.id] || {annual:0,unpaid:0,holiday:0,sick:0};
+        const appr = apprMap[emp.id] || {status:'pending'};
         return `<tr data-emp="${emp.id}"${counts?'':' style="opacity:.6;"'}>
           <td class="mono">${emp.code||'—'}</td>
           <td>${emp.name}${resignedBadge(emp, month)}</td>
@@ -2387,10 +2394,20 @@ async function renderMonthlyDataPage(main){
           <td><input data-unpaid type="number" value="${note.unpaid||0}" style="width:60px;"/></td>
           <td><input data-holiday type="number" value="${note.holiday||0}" style="width:60px;"/></td>
           <td><input data-sick type="number" value="${note.sick||0}" style="width:60px;"/></td>
+          <td>${approvalStatusBadge(appr.status)}</td>
+          <td>${appr.status==='pending' ? '—' : `<button class="btn btn-sm" data-admin-revoke="${emp.id}">${t('revokeApprovalBtn')}</button>`}</td>
         </tr>`;
-      }).join('') || `<tr><td colspan="9"><div class="empty-state">${t('noDataMonth')}</div></td></tr>`}
+      }).join('') || `<tr><td colspan="11"><div class="empty-state">${t('noDataMonth')}</div></td></tr>`}
       </tbody>
     `;
+    tbl.querySelectorAll('button[data-admin-revoke]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const empId = btn.getAttribute('data-admin-revoke');
+        await saveDataApproval(empId, month, {status:'pending'});
+        toast(t('managerApprovalRevokedToast'));
+        draw();
+      };
+    });
   }
 }
 
@@ -2454,7 +2471,9 @@ async function renderTeamApprovalPage(main){
           <td class="mono">${fmt(note.holiday)}</td>
           <td class="mono">${fmt(note.sick||0)}</td>
           <td>${approvalStatusBadge(appr.status)}</td>
-          <td><button class="btn btn-sm ${appr.status==='pending'?'btn-solid':''}" data-toggle="${emp.id}">${appr.status==='pending' ? t('approveBtn') : t('revokeApprovalBtn')}</button></td>
+          <td>${appr.status==='pending'
+              ? `<button class="btn btn-sm btn-solid" data-toggle="${emp.id}">${t('approveBtn')}</button>`
+              : `<span style="font-size:11px;color:var(--muted);">${t('lockedNote')}</span>`}</td>
           <td><button class="btn btn-sm" data-daily="${emp.id}">${t('dailyTasksBtn')}</button></td>
         </tr>`;
       }).join('') || `<tr><td colspan="11"><div class="empty-state">${t('noDataMonth')}</div></td></tr>`}
@@ -2464,11 +2483,10 @@ async function renderTeamApprovalPage(main){
       btn.onclick = async ()=>{
         const empId = btn.getAttribute('data-toggle');
         const appr = await loadDataApproval(empId, month);
-        const next = appr.status==='pending'
-          ? {status:'manager_approved', managerApprovedBy:mgr.name, managerApprovedAt:new Date().toISOString()}
-          : {status:'pending'};
+        if(appr.status!=='pending') return;
+        const next = {status:'manager_approved', managerApprovedBy:mgr.name, managerApprovedAt:new Date().toISOString()};
         await saveDataApproval(empId, month, next);
-        toast(next.status==='manager_approved' ? t('managerApprovedToast') : t('managerApprovalRevokedToast'));
+        toast(t('managerApprovedToast'));
         draw();
       };
     });
@@ -2489,6 +2507,7 @@ async function openDailyTasksModal(emp, month, approverName, onSaved){
   backdrop.innerHTML = `
     <div class="modal" style="width:640px;">
       <h3>${t('dailyTasksTitle')} ${emp.name} — ${monthLabel(month)}</h3>
+      <div id="dt-lock-banner"></div>
       <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
         <button class="btn btn-sm btn-solid" id="dt-approve-all">${t('approveAllBtn')}</button>
       </div>
@@ -2500,15 +2519,22 @@ async function openDailyTasksModal(emp, month, approverName, onSaved){
   document.body.appendChild(backdrop);
   document.getElementById('dt-close').onclick = ()=>{ backdrop.remove(); if(onSaved) onSaved(); };
   document.getElementById('dt-approve-all').onclick = async ()=>{
+    const appr = await loadDataApproval(emp.id, month);
+    if(appr.status!=='pending') return;
     await approveAllEntries(emp.id, month, approverName);
+    await saveDataApproval(emp.id, month, {status:'manager_approved', managerApprovedBy:approverName, managerApprovedAt:new Date().toISOString()});
     toast(t('allEntriesApprovedToast'));
     await drawEntries();
   };
   await drawEntries();
 
   async function drawEntries(){
-    const entries = await loadTimesheet(emp.id, month);
+    const [entries, appr] = await Promise.all([loadTimesheet(emp.id, month), loadDataApproval(emp.id, month)]);
     entries.sort((a,b)=> a.date<b.date?-1:1);
+    const locked = appr.status!=='pending';
+    const banner = document.getElementById('dt-lock-banner');
+    banner.innerHTML = locked ? `<div class="panel" style="background:var(--cyan)11;margin-bottom:10px;font-size:12.5px;">${approvalStatusBadge(appr.status)} — ${t('lockedNote')}</div>` : '';
+    document.getElementById('dt-approve-all').style.display = locked ? 'none' : '';
     const tbl = document.getElementById('dt-table');
     tbl.innerHTML = `
       <tr><th>${t('thDate')}</th><th>${t('thType')}</th><th>${t('thProject')}</th><th>${t('thTask')}</th><th>${t('thHours')}</th><th>${t('thLocation')}</th><th>${t('thApprovedCol')}</th><th></th></tr>
@@ -2521,7 +2547,7 @@ async function openDailyTasksModal(emp, month, approverName, onSaved){
           <td class="mono">${e.hours}</td>
           <td>${locLabel(e.location)}</td>
           <td>${e.approved ? `<span style="color:var(--green)">● ${t('entryApprovedBadge')}</span>` : `<span style="color:var(--amber)">● ${t('entryPendingBadge')}</span>`}</td>
-          <td><button class="btn btn-sm ${e.approved?'':'btn-solid'}" data-entry-toggle="${e.id}" data-approved="${e.approved?'1':'0'}">${e.approved ? t('revokeEntryBtn') : t('approveEntryBtn')}</button></td>
+          <td>${locked ? '—' : `<button class="btn btn-sm ${e.approved?'':'btn-solid'}" data-entry-toggle="${e.id}" data-approved="${e.approved?'1':'0'}">${e.approved ? t('revokeEntryBtn') : t('approveEntryBtn')}</button>`}</td>
         </tr>`).join('') || `<tr><td colspan="8"><div class="empty-state">${t('noEntriesForEmpMonth')}</div></td></tr>`}
     `;
     tbl.querySelectorAll('button[data-entry-toggle]').forEach(btn=>{
@@ -2725,6 +2751,7 @@ async function renderMyTimesheet(main){
     <p class="page-sub" id="my-ts-period" style="margin-top:-14px;"></p>
     <div class="panel">
       <div class="panel-title">${t('addNewEntry')}</div>
+      <div id="e-lock-banner"></div>
       <div class="row2">
         <div class="field"><label>${t('date')}</label><input type="date" id="e-date"/>
           <div id="e-date-hint" style="font-size:11.5px;color:var(--muted);margin-top:4px;"></div>
@@ -2802,6 +2829,8 @@ async function renderMyTimesheet(main){
   }
 
   async function addEntry(){
+    const appr = await loadDataApproval(emp.id, monthSel.value);
+    if(appr.status!=='pending'){ alert(t('tsLockedNote')); return; }
     const date = document.getElementById('e-date').value;
     const type = document.getElementById('e-type').value;
     const hours = Number(document.getElementById('e-hours').value);
@@ -2846,7 +2875,13 @@ async function renderMyTimesheet(main){
     const s = summarizeEntries(entries);
     document.getElementById('month-total').textContent = `${t('total')}: ${fmt(s.total)} / ${t('target')} ${emp.targetHours}`;
     const appr = await loadDataApproval(emp.id, monthSel.value);
+    const locked = appr.status!=='pending';
     document.getElementById('my-ts-approval').innerHTML = `${t('thApprovalStatus')}: ${approvalStatusBadge(appr.status)}`;
+    document.getElementById('e-lock-banner').innerHTML = locked
+      ? `<div style="background:var(--cyan)11;padding:10px 12px;border-radius:8px;font-size:12.5px;margin-bottom:10px;">${t('tsLockedNote')}</div>`
+      : '';
+    document.getElementById('e-add').disabled = locked;
+    document.getElementById('e-add').style.opacity = locked ? '.5' : '';
     const tbl = document.getElementById('my-ts-table');
     tbl.innerHTML = `
       <tr><th>${t('thDate')}</th><th>${t('thType')}</th><th>${t('thProject')}</th><th>${t('thTask')}</th><th>${t('thHours')}</th><th>${t('thLocation')}</th><th>${t('thApprovedCol')}</th><th></th></tr>
@@ -2859,7 +2894,7 @@ async function renderMyTimesheet(main){
           <td class="mono">${e.hours}</td>
           <td>${locLabel(e.location)}</td>
           <td>${e.approved ? `<span style="color:var(--green)">● ${t('entryApprovedBadge')}</span>` : `<span style="color:var(--amber)">● ${t('entryPendingBadge')}</span>`}</td>
-          <td>${e.approved ? '—' : `<button class="icon-btn" data-id="${e.id}" style="color:var(--rose)">${t('del')}</button>`}</td>
+          <td>${(locked || e.approved) ? '—' : `<button class="icon-btn" data-id="${e.id}" style="color:var(--rose)">${t('del')}</button>`}</td>
         </tr>`).join('') || `<tr><td colspan="8"><div class="empty-state">${t('noEntriesYet')}</div></td></tr>`}
     `;
     tbl.querySelectorAll('.icon-btn').forEach(b=>{
