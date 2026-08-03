@@ -309,7 +309,7 @@ const I18N = {
     logout:'خروج',
     changePassword:'تغيير كلمة المرور',
     navDashboard:'لوحة التحكم', navEmployees:'الموظفين', navProjects:'المشروعات', navTimesheets:'كل التايم شيتس', navMonthlyData:'بيانات الشهر المعتمدة', navAttendance:'الحضور والانصراف',
-    navMyTimesheet:'تايم شيت اليوم/الشهر', navMyDashboard:'الطاقة الاستيعابية بتاعتي',
+    navMyTimesheet:'تايم شيت اليوم/الشهر', navMyDashboard:'ملخص',
     navTeam:'فريقي', navGmApprovals:'اعتماد المدير العام', navCapacity:'الطاقة الإنتاجية والاستغلال',
     dailyTasksBtn:'📋 المهام اليومية', dailyTasksTitle:'اعتماد المهام اليومية —', approveAllBtn:'اعتماد الكل',
     thApprovedCol:'حالة الاعتماد', approveEntryBtn:'اعتماد', revokeEntryBtn:'إلغاء', entryApprovedBadge:'معتمدة', entryPendingBadge:'قيد المراجعة',
@@ -462,7 +462,7 @@ const I18N = {
     logout:'Logout',
     changePassword:'Change Password',
     navDashboard:'Dashboard', navEmployees:'Employees', navProjects:'Projects', navTimesheets:'All Timesheets', navMonthlyData:'Monthly Approved Data', navAttendance:'Attendance',
-    navMyTimesheet:'Daily/Monthly Timesheet', navMyDashboard:'My Utilization',
+    navMyTimesheet:'Daily/Monthly Timesheet', navMyDashboard:'Summary',
     navTeam:'My Team', navGmApprovals:'GM Approvals', navCapacity:'Utilization & Capacity',
     dailyTasksBtn:'📋 Daily Tasks', dailyTasksTitle:'Approve Daily Tasks —', approveAllBtn:'Approve All',
     thApprovedCol:'Approval Status', approveEntryBtn:'Approve', revokeEntryBtn:'Revoke', entryApprovedBadge:'Approved', entryPendingBadge:'Pending Review',
@@ -3251,13 +3251,10 @@ async function renderMyDashboard(main){
   draw();
 
   async function monthMetrics(month){
-    const [entries, approvedOverride] = await Promise.all([
-      loadTimesheet(emp.id, month),
-      loadApprovedHours(emp.id, month),
-    ]);
+    const entries = await loadTimesheet(emp.id, month);
     const s = summarizeEntries(entries);
     const totalSubmit = s.total;
-    const approvedHours = (approvedOverride===null || approvedOverride===undefined) ? s.total : approvedOverride;
+    const approvedHours = entries.filter(e=>e.approved).reduce((a,e)=>a+e.hours,0);
     const pendingHours = totalSubmit - approvedHours;
     return {totalSubmit, approvedHours, pendingHours};
   }
