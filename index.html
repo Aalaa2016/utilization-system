@@ -320,6 +320,9 @@ const I18N = {
     capAll:'الكل', capChooseProject:'اختر مشروعًا لعرض تحليل التوزيع', capKpiSectionTitle:'📊 مؤشرات الطاقة الإجمالية (وفق الفلاتر أعلاه)',
     capTabEmployees:'الموظفين', capTabProjects:'المشروعات', capAllProjects:'كل المشروعات',
     capPrjCountLbl:'عدد المشروعات', capPrjUsedPctLbl:'٪ من الساعات المخططة المستخدمة',
+    bulkUploadMonthlyTitle:'رفع ملف يعبي كل البيانات (Target, Approved, Annual, Unpaid, Holiday, Sick)',
+    bulkUploadMonthlyHint:'نزّل النموذج، املا القيم اللي عايزها لكل موظف (سيب أي خانة فاضية لو مش عايز تغيّرها)، وارفعه تاني — القيم هتتملى في الجدول تحت وتقدر تراجعها قبل ما تدوس Save All.',
+    reviewThenSaveNote:'راجع الجدول تحت ودوس Save All عشان تحفظ',
     capKpiTarget:'الطاقة المستهدفة Target Capacity', capKpiAvailable:'الطاقة المتاحة (المسجلة) Available Capacity',
     capKpiAvailPct:'نسبة الطاقة المتاحة الى الطاقة المستهدفة', capKpiUnavailPct:'نسبة الطاقة الغير متاحة الى الطاقة المستهدفة',
     capKpiEffective:'الطاقة الفعّالة (المنتجة) Effective Capacity', capKpiEffPct:'نسبة الطاقة الفعالة الى الطاقة المتاحة',
@@ -467,6 +470,9 @@ const I18N = {
     capAll:'All', capChooseProject:'Choose a project to view the distribution analysis', capKpiSectionTitle:'📊 Overall Capacity KPIs (per filters above)',
     capTabEmployees:'Employees', capTabProjects:'Projects', capAllProjects:'All Projects',
     capPrjCountLbl:'Number of Projects', capPrjUsedPctLbl:'% of Planned Hours Used',
+    bulkUploadMonthlyTitle:'Upload File to Fill All Data (Target, Approved, Annual, Unpaid, Holiday, Sick)',
+    bulkUploadMonthlyHint:'Download the template, fill in the values you want per employee (leave any cell blank to leave it unchanged), and upload it back — the values will fill the table below so you can review before clicking Save All.',
+    reviewThenSaveNote:'Review the table below then click Save All to save',
     capKpiTarget:'Target Capacity', capKpiAvailable:'Available (Logged) Capacity',
     capKpiAvailPct:'Available / Target Capacity Ratio', capKpiUnavailPct:'Unavailable / Target Capacity Ratio',
     capKpiEffective:'Effective (Productive) Capacity', capKpiEffPct:'Effective / Available Capacity Ratio',
@@ -2488,6 +2494,18 @@ async function renderMonthlyDataPage(main){
       <div id="md-parse-result" style="margin-top:10px;font-size:12.5px;"></div>
     </div>
     <div class="panel">
+      <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <span>${t('bulkUploadMonthlyTitle')}</span>
+        <button class="btn" id="md-download-template" style="font-size:12px;">⬇ ${t('downloadTemplateBtn')}</button>
+      </div>
+      <p class="page-sub" style="margin-top:-6px;">${t('bulkUploadMonthlyHint')}</p>
+      <div class="filters-row" style="align-items:center;">
+        <input type="file" id="md-file2" accept=".xlsx,.xls,.csv"/>
+        <button class="btn btn-solid" id="md-parse2">${t('parseFile')}</button>
+      </div>
+      <div id="md-parse-result2" style="margin-top:10px;font-size:12.5px;"></div>
+    </div>
+    <div class="panel">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
         <div class="panel-title" style="margin:0;">${t('detailsByEmp')}</div>
         <button class="btn btn-solid btn-sm" id="md-save-all">${t('saveAll')}</button>
@@ -2534,6 +2552,57 @@ async function renderMonthlyDataPage(main){
       const code = inp.getAttribute('data-code');
       if(code && parsedByCode[code]!==undefined){ inp.value = fmt(parsedByCode[code]); }
     });
+  };
+
+  document.getElementById('md-download-template').onclick = ()=>{
+    const rows = document.querySelectorAll('#md-table tbody tr[data-emp]');
+    const data = Array.from(rows).map(row=>{
+      const empId = row.getAttribute('data-emp');
+      const emp = state.employees.find(e=>e.id===empId);
+      return {
+        Code: emp?.code||'', Name: emp?.name||'',
+        Target: '', 'Approved Hours': '', Annual: '', Unpaid: '', Holiday: '', Sick: '',
+      };
+    });
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = [{wch:10},{wch:26},{wch:9},{wch:14},{wch:9},{wch:9},{wch:9},{wch:9}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Monthly Data');
+    XLSX.writeFile(wb, `monthly-data-template-${monthSel.value}.xlsx`);
+  };
+
+  document.getElementById('md-parse2').onclick = async ()=>{
+    const fileInput = document.getElementById('md-file2');
+    const resultBox = document.getElementById('md-parse-result2');
+    if(!fileInput.files || !fileInput.files[0]){ resultBox.textContent = t('chooseFile'); return; }
+    resultBox.textContent = t('loading');
+    try{
+      const buf = await fileInput.files[0].arrayBuffer();
+      const wb = XLSX.read(buf, {type:'array', cellDates:true});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+      const byEmpId = parseMonthlyDataRows(rows);
+      const empIds = Object.keys(byEmpId);
+      if(empIds.length===0){
+        resultBox.textContent = t('importedAttendanceNoMatch');
+        return;
+      }
+      empIds.forEach(empId=>{
+        const row = document.querySelector(`#md-table tbody tr[data-emp="${empId}"]`);
+        if(!row) return;
+        const v = byEmpId[empId];
+        const setIf = (sel, val)=>{ if(val!==undefined && val!==null && val!=='') row.querySelector(sel).value = val; };
+        setIf('input[data-target]', v.target);
+        setIf('input[data-approved]', v.approved);
+        setIf('input[data-annual]', v.annual);
+        setIf('input[data-unpaid]', v.unpaid);
+        setIf('input[data-holiday]', v.holiday);
+        setIf('input[data-sick]', v.sick);
+      });
+      resultBox.innerHTML = `<span class="badge" style="background:#2F7FD422;color:#2F7FD4;">${t('importedAttendanceDays')} ${empIds.length}</span> — ${t('reviewThenSaveNote')}`;
+    }catch(e){
+      resultBox.textContent = 'Error: ' + e.message;
+    }
   };
 
   document.getElementById('md-save-all').onclick = async ()=>{
@@ -2866,6 +2935,52 @@ async function renderGmApprovalsPage(main){
 /* Flexible attendance-sheet parser: matches employee code/name and either a ready
    "Hours" column, or Date + Check-in + Check-out columns, and sums hours per
    employee within the given fiscal month period. Returns { [employeeCode]: totalHours } */
+function parseMonthlyDataRows(rows){
+  // Flexible column matching (any order): Code/Name to identify the employee, plus
+  // Target / Approved Hours / Annual / Unpaid / Holiday / Sick — any subset can be present.
+  if(!rows || !rows.length) return {};
+  const sampleKeys = Object.keys(rows[0]);
+  const findKey = (patterns)=> sampleKeys.find(k=> patterns.some(p=> k.toString().toLowerCase().includes(p)));
+  const codeKey = findKey(['code','كود']);
+  const nameKey = findKey(['name','اسم']);
+  const targetKey = findKey(['target','مستهدف']);
+  const approvedKey = findKey(['approved','معتمد']);
+  const annualKey = findKey(['annual']);
+  const unpaidKey = findKey(['unpaid']);
+  const holidayKey = findKey(['holiday']);
+  const sickKey = findKey(['sick']);
+
+  const empByCode = {}; state.employees.forEach(e=>{ if(e.code) empByCode[String(e.code).trim().toLowerCase()] = e; });
+  const empByName = {}; state.employees.forEach(e=>{ empByName[String(e.name).trim().toLowerCase()] = e; });
+  const resolveEmp = (row)=>{
+    if(codeKey && row[codeKey]!==undefined && row[codeKey]!==''){
+      const emp = empByCode[String(row[codeKey]).trim().toLowerCase()];
+      if(emp) return emp;
+    }
+    if(nameKey && row[nameKey]){
+      const emp = empByName[String(row[nameKey]).trim().toLowerCase()];
+      if(emp) return emp;
+    }
+    return null;
+  };
+  const toNum = (v)=>{ if(v===undefined || v===null || v==='') return undefined; const n = Number(v); return isFinite(n) ? n : undefined; };
+
+  const out = {};
+  for(const row of rows){
+    const emp = resolveEmp(row);
+    if(!emp) continue;
+    out[emp.id] = {
+      target: targetKey ? toNum(row[targetKey]) : undefined,
+      approved: approvedKey ? toNum(row[approvedKey]) : undefined,
+      annual: annualKey ? toNum(row[annualKey]) : undefined,
+      unpaid: unpaidKey ? toNum(row[unpaidKey]) : undefined,
+      holiday: holidayKey ? toNum(row[holidayKey]) : undefined,
+      sick: sickKey ? toNum(row[sickKey]) : undefined,
+    };
+  }
+  return out;
+}
+
 function parseAttendanceRows(rows, monthValue){
   if(!rows || !rows.length) return {};
   const sampleKeys = Object.keys(rows[0]);
