@@ -436,6 +436,7 @@ const I18N = {
     bulkImportAttendanceHint:'الأعمدة ينفع تكون بأي ترتيب، المهم يكون فيها كود/اسم الموظف ووقت الدخول والخروج (بأي صيغة وقت). لو الملف مفهوش عمود تاريخ، هيتطبق التاريخ المكتوب فوق في "إضافة يوم حضور" على كل الصفوف.',
     importAttendanceBtn:'استيراد وحفظ', importedAttendanceDays:'تم استيراد وحفظ', importedAttendanceNoMatch:'مقدرناش نطابق أي صف من الملف مع موظفين أو تواريخ صحيحة',
     dailyTargetHint:'ساعات الحضور المسجلة لهذا اليوم', noAttendanceForDate:'مفيش حضور مسجل لهذا اليوم',
+    attHoursLbl:'ساعات الحضور', distributedHoursLbl:'ساعات التوزيع',
     dailyMismatchWarning:'تنبيه: مجموع ساعات التوزيع لهذا اليوم مختلف عن ساعات الحضور الفعلية المسجلة',
     showResigned:'إظهار المستقيلين',
     attStatus:'حالة اليوم',
@@ -582,6 +583,7 @@ const I18N = {
     bulkImportAttendanceHint:'Columns can be in any order — just make sure the file has employee code/name and check-in/check-out (any time format). If the file has no Date column, the date entered above in "Add Attendance Day" will be applied to every row.',
     importAttendanceBtn:'Import & Save', importedAttendanceDays:'Imported and saved', importedAttendanceNoMatch:'Could not match any row from the file with valid employees or dates',
     dailyTargetHint:'Recorded attendance hours for this day', noAttendanceForDate:'No attendance recorded for this day',
+    attHoursLbl:'Attendance Hours', distributedHoursLbl:'Distributed Hours',
     dailyMismatchWarning:'Warning: the total distributed hours for this day differ from the actual recorded attendance hours',
     showResigned:'Show Resigned',
     attStatus:'Day Status',
@@ -2725,27 +2727,56 @@ async function openDailyTasksModal(emp, month, approverName, onSaved){
   await drawEntries();
 
   async function drawEntries(){
-    const [entries, appr] = await Promise.all([loadTimesheet(emp.id, month), loadDataApproval(emp.id, month)]);
+    const [entries, appr, attDays] = await Promise.all([loadTimesheet(emp.id, month), loadDataApproval(emp.id, month), loadAttendance(emp.id, month)]);
     entries.sort((a,b)=> a.date<b.date?-1:1);
+    const attByDate = {};
+    attDays.forEach(d=>{ attByDate[d.date] = d; });
     const locked = appr.status!=='pending';
     const banner = document.getElementById('dt-lock-banner');
     banner.innerHTML = locked ? `<div class="panel" style="background:var(--cyan)11;margin-bottom:10px;font-size:12.5px;">${approvalStatusBadge(appr.status)} — ${t('lockedNote')}</div>` : '';
     document.getElementById('dt-approve-all').style.display = locked ? 'none' : '';
+
+    // group entries by date
+    const byDate = {};
+    entries.forEach(e=>{ (byDate[e.date] = byDate[e.date] || []).push(e); });
+    const allDates = Array.from(new Set([...Object.keys(byDate), ...attDays.map(d=>d.date)])).sort();
+
     const tbl = document.getElementById('dt-table');
-    tbl.innerHTML = `
-      <tr><th>${t('thDate')}</th><th>${t('thType')}</th><th>${t('thProject')}</th><th>${t('thTask')}</th><th>${t('thHours')}</th><th>${t('thLocation')}</th><th>${t('thApprovedCol')}</th><th></th></tr>
-      ${entries.map(e=>`
+    tbl.innerHTML = `<tr><th></th><th>${t('thType')}</th><th>${t('thProject')}</th><th>${t('thTask')}</th><th>${t('thHours')}</th><th>${t('thLocation')}</th><th>${t('thApprovedCol')}</th></tr>` + (allDates.map(date=>{
+      const dayEntries = (byDate[date]||[]).slice();
+      const distributed = dayEntries.reduce((a,e)=>a+Number(e.hours||0),0);
+      const att = attByDate[date];
+      const attStatus = att ? (att.status||'present') : null;
+      const attHours = att ? (attStatus==='present' ? att.hours : 0) : null;
+      const hasMismatch = att!==undefined && att!==null && Math.abs((attHours||0) - distributed) > 0.01;
+      const dayHeaderColor = att===undefined || att===null ? 'var(--muted)' : (hasMismatch ? 'var(--rose)' : 'var(--green)');
+      return `
+        <tr style="background:#F3F7FB;">
+          <td colspan="7" style="padding:8px 10px;">
+            <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:12.5px;">
+              <b class="mono">📅 ${date}</b>
+              <span>${t('attHoursLbl')}: <b class="mono" style="color:${att?(attStatus==='present'?'inherit':((ATTENDANCE_STATUSES[attStatus]||{}).color||'inherit')):'var(--muted)'}">${att ? (attStatus==='present'?fmt(attHours):attendanceStatusLabel(attStatus)) : t('noAttendanceForDate')}</b></span>
+              <span>${t('distributedHoursLbl')}: <b class="mono">${fmt(distributed)}</b></span>
+              ${att ? `<span style="color:${dayHeaderColor};font-weight:700;">${hasMismatch ? '⚠️ '+t('dailyMismatchWarning') : '✓'}</span>` : ''}
+            </div>
+          </td>
+        </tr>
+        ${dayEntries.map(e=>`
         <tr>
-          <td class="mono">${e.date}</td>
+          <td style="width:24px;"></td>
           <td><span style="color:${ENTRY_TYPES[e.type].color}">${entryLabel(e.type)}</span></td>
           <td>${e.type==='project' ? (state.projects.find(p=>p.id===e.projectId)?.name || '—') : '—'}</td>
           <td>${e.task ? e.task : '—'}</td>
           <td class="mono">${e.hours}</td>
           <td>${locLabel(e.location)}</td>
           <td>${e.approved ? `<span style="color:var(--green)">● ${t('entryApprovedBadge')}</span>` : `<span style="color:var(--amber)">● ${t('entryPendingBadge')}</span>`}</td>
-          <td>${locked ? '—' : `<button class="btn btn-sm ${e.approved?'':'btn-solid'}" data-entry-toggle="${e.id}" data-approved="${e.approved?'1':'0'}">${e.approved ? t('revokeEntryBtn') : t('approveEntryBtn')}</button>`}</td>
-        </tr>`).join('') || `<tr><td colspan="8"><div class="empty-state">${t('noEntriesForEmpMonth')}</div></td></tr>`}
-    `;
+        </tr>
+        <tr>
+          <td></td>
+          <td colspan="6" style="padding-bottom:8px;">${locked ? '' : `<button class="btn btn-sm ${e.approved?'':'btn-solid'}" data-entry-toggle="${e.id}" data-approved="${e.approved?'1':'0'}">${e.approved ? t('revokeEntryBtn') : t('approveEntryBtn')}</button>`}</td>
+        </tr>`).join('') || `<tr><td></td><td colspan="6"><div class="empty-state" style="padding:6px 0;">${t('noEntriesYet')}</div></td></tr>`}
+      `;
+    }).join('') || `<tr><td colspan="7"><div class="empty-state">${t('noEntriesForEmpMonth')}</div></td></tr>`);
     tbl.querySelectorAll('button[data-entry-toggle]').forEach(btn=>{
       btn.onclick = async ()=>{
         const entryId = btn.getAttribute('data-entry-toggle');
