@@ -323,6 +323,7 @@ const I18N = {
     bulkUploadMonthlyTitle:'رفع ملف يعبي كل البيانات (Target, Approved, Annual, Unpaid, Holiday, Sick)',
     bulkUploadMonthlyHint:'نزّل النموذج، املا القيم اللي عايزها لكل موظف (سيب أي خانة فاضية لو مش عايز تغيّرها)، وارفعه تاني — القيم هتتملى في الجدول تحت وتقدر تراجعها قبل ما تدوس Save All.',
     reviewThenSaveNote:'راجع الجدول تحت ودوس Save All عشان تحفظ',
+    willApplyToMonthLbl:'البيانات دي هتتطبق على شهر',
     capKpiTarget:'الطاقة المستهدفة Target Capacity', capKpiAvailable:'الطاقة المتاحة (المسجلة) Available Capacity',
     capKpiAvailPct:'نسبة الطاقة المتاحة الى الطاقة المستهدفة', capKpiUnavailPct:'نسبة الطاقة الغير متاحة الى الطاقة المستهدفة',
     capKpiEffective:'الطاقة الفعّالة (المنتجة) Effective Capacity', capKpiEffPct:'نسبة الطاقة الفعالة الى الطاقة المتاحة',
@@ -473,6 +474,7 @@ const I18N = {
     bulkUploadMonthlyTitle:'Upload File to Fill All Data (Target, Approved, Annual, Unpaid, Holiday, Sick)',
     bulkUploadMonthlyHint:'Download the template, fill in the values you want per employee (leave any cell blank to leave it unchanged), and upload it back — the values will fill the table below so you can review before clicking Save All.',
     reviewThenSaveNote:'Review the table below then click Save All to save',
+    willApplyToMonthLbl:'This data will apply to',
     capKpiTarget:'Target Capacity', capKpiAvailable:'Available (Logged) Capacity',
     capKpiAvailPct:'Available / Target Capacity Ratio', capKpiUnavailPct:'Unavailable / Target Capacity Ratio',
     capKpiEffective:'Effective (Productive) Capacity', capKpiEffPct:'Effective / Available Capacity Ratio',
@@ -2499,6 +2501,9 @@ async function renderMonthlyDataPage(main){
         <button class="btn" id="md-download-template" style="font-size:12px;">⬇ ${t('downloadTemplateBtn')}</button>
       </div>
       <p class="page-sub" style="margin-top:-6px;">${t('bulkUploadMonthlyHint')}</p>
+      <div style="background:var(--cyan)11;padding:8px 12px;border-radius:8px;font-size:12.5px;margin-bottom:10px;">
+        ${t('willApplyToMonthLbl')}: <b id="md-target-month" class="mono"></b>
+      </div>
       <div class="filters-row" style="align-items:center;">
         <input type="file" id="md-file2" accept=".xlsx,.xls,.csv"/>
         <button class="btn btn-solid" id="md-parse2">${t('parseFile')}</button>
@@ -2626,6 +2631,7 @@ async function renderMonthlyDataPage(main){
 
   async function draw(){
     document.getElementById('md-period').textContent = `${t('fiscalPeriodLbl')} ${fiscalRangeLabel(monthSel.value)}`;
+    document.getElementById('md-target-month').textContent = monthLabel(monthSel.value);
     const month = monthSel.value;
     const deptFilter = deptSel.value;
     const activeEmps = state.employees.filter(e=>(!deptFilter || e.department===deptFilter) && employeeActiveInMonth(e, month) && (showResignedChk.checked || employeeCountsInMonth(e, month)));
