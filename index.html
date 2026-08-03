@@ -3237,96 +3237,43 @@ async function renderMyTimesheet(main){
 async function renderMyDashboard(main){
   const emp = state.currentUser;
   main.innerHTML = `
-    <h2 class="page-title">${t('myDashTitle')}</h2>
+    <h2 class="page-title">Summary</h2>
     <p class="page-sub">${emp.name} — ${deptName(emp.department)}</p>
-    <div class="filters-row"><select id="d-month">${MONTHS.map(([v])=>`<option value="${v}">${monthLabel(v)}</option>`).join('')}</select></div>
+    <div class="panel">
+      <div class="panel-title">${t('thMonth')}</div>
+      <div class="filters-row"><select id="d-month">${MONTHS.map(([v])=>`<option value="${v}">${monthLabel(v)}</option>`).join('')}</select></div>
+    </div>
     <div id="my-dash-body"><div class="empty-state">${t('loading')}</div></div>
-    <div class="panel">
-      <div class="panel-title">${t('utilTrend')}</div>
-      <div class="chart-box"><canvas id="chart-trend"></canvas></div>
-    </div>
-    <div class="panel">
-      <div class="panel-title">${t('myDashByMonth')}</div>
-      <table id="my-dash-table"></table>
-    </div>
   `;
   const monthSel = document.getElementById('d-month');
   monthSel.value = currentDefaultMonth();
   monthSel.onchange = draw;
   draw();
-  drawTrend();
-  drawByMonthTable();
 
   async function monthMetrics(month){
-    const [entries, targetOverride, approvedOverride, note] = await Promise.all([
+    const [entries, approvedOverride] = await Promise.all([
       loadTimesheet(emp.id, month),
-      loadTargetOverride(emp.id, month),
       loadApprovedHours(emp.id, month),
-      loadNote(emp.id, month),
     ]);
     const s = summarizeEntries(entries);
-    const target = effectiveTarget(emp, targetOverride);
+    const totalSubmit = s.total;
     const approvedHours = (approvedOverride===null || approvedOverride===undefined) ? s.total : approvedOverride;
-    return {target, approvedHours, annual: note.annual||0, unpaid: note.unpaid||0, holiday: note.holiday||0, sick: note.sick||0};
+    const pendingHours = totalSubmit - approvedHours;
+    return {totalSubmit, approvedHours, pendingHours};
   }
 
   async function draw(){
     const m = await monthMetrics(monthSel.value);
     const body = document.getElementById('my-dash-body');
     body.innerHTML = `
-      <div class="cards-row">
-        <div class="stat-card"><div class="lbl">${t('thTargetHours')}</div><div class="val mono">${fmt(m.target)}</div></div>
-        <div class="stat-card"><div class="lbl">${t('thApprovedHours')}</div><div class="val mono">${fmt(m.approvedHours)}</div></div>
-        <div class="stat-card"><div class="lbl">${t('colAnnual')}</div><div class="val mono">${fmt(m.annual)}</div></div>
-        <div class="stat-card"><div class="lbl">${t('colUnpaid')}</div><div class="val mono">${fmt(m.unpaid)}</div></div>
-        <div class="stat-card"><div class="lbl">${t('colHoliday')}</div><div class="val mono">${fmt(m.holiday)}</div></div>
-        <div class="stat-card"><div class="lbl">${t('colSick')}</div><div class="val mono">${fmt(m.sick)}</div></div>
+      <div class="panel">
+        <div class="cards-row">
+          <div class="stat-card"><div class="lbl">Total Submit</div><div class="val mono">${fmt(m.totalSubmit)}</div></div>
+          <div class="stat-card"><div class="lbl">Approved</div><div class="val mono" style="color:var(--green)">${fmt(m.approvedHours)}</div></div>
+          <div class="stat-card"><div class="lbl">Pending</div><div class="val mono" style="color:var(--amber)">${fmt(m.pendingHours)}</div></div>
+        </div>
       </div>
     `;
-  }
-
-  async function drawByMonthTable(){
-    const tbl = document.getElementById('my-dash-table');
-    tbl.innerHTML = `<tr><td colspan="7"><div class="empty-state">${t('loading')}</div></td></tr>`;
-    const rows = [];
-    for(const [v] of MONTHS){
-      const m = await monthMetrics(v);
-      rows.push({label: monthLabel(v), ...m});
-    }
-    tbl.innerHTML = `
-      <tr>
-        <th>${t('thMonth')}</th>
-        <th>${t('thTargetHours')}</th>
-        <th>${t('thApprovedHours')}</th>
-        <th>${t('colAnnual')}</th>
-        <th>${t('colUnpaid')}</th>
-        <th>${t('colHoliday')}</th>
-        <th>${t('colSick')}</th>
-      </tr>
-      ${rows.map(r=>`
-        <tr>
-          <td>${r.label}</td>
-          <td class="mono">${fmt(r.target)}</td>
-          <td class="mono">${fmt(r.approvedHours)}</td>
-          <td class="mono">${fmt(r.annual)}</td>
-          <td class="mono">${fmt(r.unpaid)}</td>
-          <td class="mono">${fmt(r.holiday)}</td>
-          <td class="mono">${fmt(r.sick)}</td>
-        </tr>`).join('')}
-    `;
-  }
-
-  async function drawTrend(){
-    const labels=[], ratios=[];
-    for(const [v] of MONTHS){
-      const m = await monthMetrics(v);
-      labels.push(monthLabel(v).split(' ')[0]);
-      ratios.push(m.target ? (m.approvedHours/m.target*100) : 0);
-    }
-    mkChart('chart-trend','line', {
-      labels,
-      datasets:[{label:t('approvedVsTargetLbl'), data:ratios, borderColor:'#2F7FD4', backgroundColor:'rgba(47,127,212,.15)', fill:true, tension:.3}]
-    }, {scales:{y:{beginAtZero:true,max:120,ticks:{color:'#7C93A8'},grid:{color:'#D7E4F2'}},x:{ticks:{color:'#7C93A8'},grid:{display:false}}}, plugins:{legend:{display:false}}});
   }
 }
 
