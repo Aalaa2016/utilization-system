@@ -325,6 +325,7 @@ const I18N = {
     reviewThenSaveNote:'راجع الجدول تحت ودوس Save All عشان تحفظ',
     willApplyToMonthLbl:'البيانات دي هتتطبق على شهر',
     savedAllApprovedToast:'تم حفظ واعتماد بيانات كل الموظفين نهائيًا', skippedPartTimeLbl:'اتجاهل (Part-time)',
+    fulltimeOnlyNote:'الصفحة دي بتعرض موظفين Full-time بس — موظفين Part-time بيسجلوا ساعاتهم بس من غير Target/Approved/Annual/Unpaid/Holiday/Sick.',
     capKpiTarget:'الطاقة المستهدفة Target Capacity', capKpiAvailable:'الطاقة المتاحة (المسجلة) Available Capacity',
     capKpiAvailPct:'نسبة الطاقة المتاحة الى الطاقة المستهدفة', capKpiUnavailPct:'نسبة الطاقة الغير متاحة الى الطاقة المستهدفة',
     capKpiEffective:'الطاقة الفعّالة (المنتجة) Effective Capacity', capKpiEffPct:'نسبة الطاقة الفعالة الى الطاقة المتاحة',
@@ -477,6 +478,7 @@ const I18N = {
     reviewThenSaveNote:'Review the table below then click Save All to save',
     willApplyToMonthLbl:'This data will apply to',
     savedAllApprovedToast:'Saved and fully approved for all employees', skippedPartTimeLbl:'Skipped (Part-time)',
+    fulltimeOnlyNote:'This page shows Full-time employees only — Part-time employees log their hours only, without Target/Approved/Annual/Unpaid/Holiday/Sick.',
     capKpiTarget:'Target Capacity', capKpiAvailable:'Available (Logged) Capacity',
     capKpiAvailPct:'Available / Target Capacity Ratio', capKpiUnavailPct:'Unavailable / Target Capacity Ratio',
     capKpiEffective:'Effective (Productive) Capacity', capKpiEffPct:'Effective / Available Capacity Ratio',
@@ -2486,6 +2488,7 @@ async function renderMonthlyDataPage(main){
     <div class="panel" style="font-size:12.5px;color:var(--muted);">
       <div>${t('fiscalPeriodNote')}</div>
       <div style="margin-top:4px;"><b id="md-period" class="mono"></b></div>
+      <div style="margin-top:6px;">${t('fulltimeOnlyNote')}</div>
     </div>
     <div class="panel">
       <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
@@ -2609,7 +2612,7 @@ async function renderMonthlyDataPage(main){
     document.getElementById('md-target-month').textContent = monthLabel(monthSel.value);
     const month = monthSel.value;
     const deptFilter = deptSel.value;
-    const activeEmps = state.employees.filter(e=>(!deptFilter || e.department===deptFilter) && employeeActiveInMonth(e, month) && (showResignedChk.checked || employeeCountsInMonth(e, month)));
+    const activeEmps = state.employees.filter(e=> e.status==='active_fulltime' && (!deptFilter || e.department===deptFilter) && employeeActiveInMonth(e, month) && (showResignedChk.checked || employeeCountsInMonth(e, month)));
     const [targets, approvedMap, notesMap, apprMap] = await Promise.all([
       loadAllTargetsForMonth(activeEmps.map(e=>e.id), month),
       loadAllApprovedForMonth(activeEmps.map(e=>e.id), month),
