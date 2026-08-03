@@ -324,6 +324,7 @@ const I18N = {
     bulkUploadMonthlyHint:'نزّل النموذج، املا القيم اللي عايزها لكل موظف (سيب أي خانة فاضية لو مش عايز تغيّرها)، وارفعه تاني — القيم هتتملى في الجدول تحت وتقدر تراجعها قبل ما تدوس Save All.',
     reviewThenSaveNote:'راجع الجدول تحت ودوس Save All عشان تحفظ',
     willApplyToMonthLbl:'البيانات دي هتتطبق على شهر',
+    savedAllApprovedToast:'تم حفظ واعتماد بيانات كل الموظفين نهائيًا', skippedPartTimeLbl:'اتجاهل (Part-time)',
     capKpiTarget:'الطاقة المستهدفة Target Capacity', capKpiAvailable:'الطاقة المتاحة (المسجلة) Available Capacity',
     capKpiAvailPct:'نسبة الطاقة المتاحة الى الطاقة المستهدفة', capKpiUnavailPct:'نسبة الطاقة الغير متاحة الى الطاقة المستهدفة',
     capKpiEffective:'الطاقة الفعّالة (المنتجة) Effective Capacity', capKpiEffPct:'نسبة الطاقة الفعالة الى الطاقة المتاحة',
@@ -475,6 +476,7 @@ const I18N = {
     bulkUploadMonthlyHint:'Download the template, fill in the values you want per employee (leave any cell blank to leave it unchanged), and upload it back — the values will fill the table below so you can review before clicking Save All.',
     reviewThenSaveNote:'Review the table below then click Save All to save',
     willApplyToMonthLbl:'This data will apply to',
+    savedAllApprovedToast:'Saved and fully approved for all employees', skippedPartTimeLbl:'Skipped (Part-time)',
     capKpiTarget:'Target Capacity', capKpiAvailable:'Available (Logged) Capacity',
     capKpiAvailPct:'Available / Target Capacity Ratio', capKpiUnavailPct:'Unavailable / Target Capacity Ratio',
     capKpiEffective:'Effective (Productive) Capacity', capKpiEffPct:'Effective / Available Capacity Ratio',
@@ -2486,16 +2488,6 @@ async function renderMonthlyDataPage(main){
       <div style="margin-top:4px;"><b id="md-period" class="mono"></b></div>
     </div>
     <div class="panel">
-      <div class="panel-title">${t('uploadAttendanceTitle')}</div>
-      <p class="page-sub" style="margin-top:-6px;">${t('uploadAttendanceHint')}</p>
-      <div class="filters-row" style="align-items:center;">
-        <input type="file" id="md-file" accept=".xlsx,.xls,.csv"/>
-        <button class="btn" id="md-parse">${t('parseFile')}</button>
-        <button class="btn btn-solid" id="md-apply" style="display:none;">${t('applyToTable')}</button>
-      </div>
-      <div id="md-parse-result" style="margin-top:10px;font-size:12.5px;"></div>
-    </div>
-    <div class="panel">
       <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
         <span>${t('bulkUploadMonthlyTitle')}</span>
         <button class="btn" id="md-download-template" style="font-size:12px;">⬇ ${t('downloadTemplateBtn')}</button>
@@ -2523,41 +2515,6 @@ async function renderMonthlyDataPage(main){
   const showResignedChk = document.getElementById('md-show-resigned');
   monthSel.value = currentDefaultMonth();
   monthSel.onchange = draw; deptSel.onchange = draw; showResignedChk.onchange = draw;
-  let parsedByCode = null; // populated after parsing an attendance file
-
-  document.getElementById('md-parse').onclick = async ()=>{
-    const fileInput = document.getElementById('md-file');
-    const resultBox = document.getElementById('md-parse-result');
-    const applyBtn = document.getElementById('md-apply');
-    if(!fileInput.files || !fileInput.files[0]){ resultBox.textContent = t('chooseFile'); return; }
-    resultBox.textContent = t('loading');
-    try{
-      const buf = await fileInput.files[0].arrayBuffer();
-      const wb = XLSX.read(buf, {type:'array', cellDates:true});
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
-      parsedByCode = parseAttendanceRows(rows, monthSel.value);
-      const codes = Object.keys(parsedByCode);
-      if(codes.length===0){
-        resultBox.textContent = t('parseNoMatch');
-        applyBtn.style.display='none';
-      } else {
-        resultBox.innerHTML = `${t('parseSummary')} ${codes.length} — ` +
-          codes.map(c=>`<span class="badge" style="background:#2F7FD422;color:#2F7FD4;margin-inline-end:4px;">${c}: ${fmt(parsedByCode[c])}h</span>`).join(' ');
-        applyBtn.style.display='inline-block';
-      }
-    }catch(e){
-      resultBox.textContent = 'Error: ' + e.message;
-    }
-  };
-
-  document.getElementById('md-apply').onclick = ()=>{
-    if(!parsedByCode) return;
-    document.querySelectorAll('#md-table input[data-approved]').forEach(inp=>{
-      const code = inp.getAttribute('data-code');
-      if(code && parsedByCode[code]!==undefined){ inp.value = fmt(parsedByCode[code]); }
-    });
-  };
 
   document.getElementById('md-download-template').onclick = ()=>{
     const rows = document.querySelectorAll('#md-table tbody tr[data-emp]');
@@ -2587,8 +2544,13 @@ async function renderMonthlyDataPage(main){
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
       const byEmpId = parseMonthlyDataRows(rows);
-      const empIds = Object.keys(byEmpId);
-      if(empIds.length===0){
+      const allMatchedIds = Object.keys(byEmpId);
+      const empIds = allMatchedIds.filter(id=>{
+        const emp = state.employees.find(e=>e.id===id);
+        return emp && emp.status==='active_fulltime';
+      });
+      const skippedCount = allMatchedIds.length - empIds.length;
+      if(allMatchedIds.length===0){
         resultBox.textContent = t('importedAttendanceNoMatch');
         return;
       }
@@ -2604,7 +2566,9 @@ async function renderMonthlyDataPage(main){
         setIf('input[data-holiday]', v.holiday);
         setIf('input[data-sick]', v.sick);
       });
-      resultBox.innerHTML = `<span class="badge" style="background:#2F7FD422;color:#2F7FD4;">${t('importedAttendanceDays')} ${empIds.length}</span> — ${t('reviewThenSaveNote')}`;
+      resultBox.innerHTML = `<span class="badge" style="background:#2F7FD422;color:#2F7FD4;">${t('importedAttendanceDays')} ${empIds.length}</span>`
+        + (skippedCount>0 ? ` <span class="badge" style="background:var(--muted)22;color:var(--muted);">${t('skippedPartTimeLbl')} ${skippedCount}</span>` : '')
+        + ` — ${t('reviewThenSaveNote')}`;
     }catch(e){
       resultBox.textContent = 'Error: ' + e.message;
     }
@@ -2612,6 +2576,8 @@ async function renderMonthlyDataPage(main){
 
   document.getElementById('md-save-all').onclick = async ()=>{
     const rows = document.querySelectorAll('#md-table tbody tr[data-emp]');
+    const now = new Date().toISOString();
+    const approverName = state.currentUser.name;
     for(const row of rows){
       const empId = row.getAttribute('data-emp');
       const target = Number(row.querySelector('input[data-target]').value)||0;
@@ -2623,8 +2589,17 @@ async function renderMonthlyDataPage(main){
       await saveTargetOverride(empId, monthSel.value, target);
       await saveApprovedHours(empId, monthSel.value, approved);
       await saveNote(empId, monthSel.value, {annual, unpaid, holiday, sick});
+      // Admin/GM Save All records and fully approves the month in one step —
+      // it does not require the direct manager to have approved it first.
+      await approveAllEntries(empId, monthSel.value, approverName);
+      await saveDataApproval(empId, monthSel.value, {
+        status:'gm_approved',
+        managerApprovedBy: approverName, managerApprovedAt: now,
+        gmApprovedBy: approverName, gmApprovedAt: now,
+      });
     }
-    toast(t('savedAll'));
+    toast(t('savedAllApprovedToast'));
+    draw();
   };
 
   draw();
