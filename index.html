@@ -311,6 +311,11 @@ const I18N = {
     navDashboard:'لوحة التحكم', navEmployees:'الموظفين', navProjects:'المشروعات', navTimesheets:'كل التايم شيتس', navMonthlyData:'بيانات الشهر المعتمدة', navAttendance:'الحضور والانصراف',
     navMyTimesheet:'تايم شيت اليوم/الشهر', navMyDashboard:'ملخص',
     navTeam:'فريقي', navGmApprovals:'اعتماد المدير العام', navCapacity:'الطاقة الإنتاجية والاستغلال',
+    navProjectAccess:'صلاحيات المشاريع',
+    projAccessTitle:'صلاحيات اختيار المشاريع', projAccessSub:'حدد لكل موظف، لكل شهر، المشاريع المسموح له يختارها في التايم شيت — بتنطبق على Full-time و Part-time',
+    selectAllBtn:'اختيار الكل', clearAllBtn:'إلغاء الكل',
+    customListActiveLbl:'قائمة مخصصة مفعّلة', noRestrictionLbl:'من غير تقييد — كل المشاريع النشطة ظاهرة',
+    noPrjAvailable:'مفيش مشاريع متاحة', projectNotAllowed:'المشروع ده مش متاح ليك في الشهر ده',
     dailyTasksBtn:'📋 المهام اليومية', dailyTasksTitle:'اعتماد المهام اليومية —', approveAllBtn:'اعتماد الكل',
     thApprovedCol:'حالة الاعتماد', approveEntryBtn:'اعتماد', revokeEntryBtn:'إلغاء', entryApprovedBadge:'معتمدة', entryPendingBadge:'قيد المراجعة',
     entryApprovedToast:'تم اعتماد المهمة', entryRevokedToast:'تم إلغاء اعتماد المهمة', allEntriesApprovedToast:'تم اعتماد كل مهام الموظف للشهر',
@@ -464,6 +469,11 @@ const I18N = {
     navDashboard:'Dashboard', navEmployees:'Employees', navProjects:'Projects', navTimesheets:'All Timesheets', navMonthlyData:'Monthly Approved Data', navAttendance:'Attendance',
     navMyTimesheet:'Daily/Monthly Timesheet', navMyDashboard:'Summary',
     navTeam:'My Team', navGmApprovals:'GM Approvals', navCapacity:'Utilization & Capacity',
+    navProjectAccess:'Project Access',
+    projAccessTitle:'Project Selection Access', projAccessSub:'For each employee, per month, choose which projects they are allowed to pick in their Timesheet — applies to both Full-time and Part-time',
+    selectAllBtn:'Select All', clearAllBtn:'Clear All',
+    customListActiveLbl:'Custom list active', noRestrictionLbl:'No restriction — all active projects visible',
+    noPrjAvailable:'No projects available', projectNotAllowed:'This project is not available to you this month',
     dailyTasksBtn:'📋 Daily Tasks', dailyTasksTitle:'Approve Daily Tasks —', approveAllBtn:'Approve All',
     thApprovedCol:'Approval Status', approveEntryBtn:'Approve', revokeEntryBtn:'Revoke', entryApprovedBadge:'Approved', entryPendingBadge:'Pending Review',
     entryApprovedToast:'Task approved', entryRevokedToast:'Task approval revoked', allEntriesApprovedToast:'All employee tasks for the month approved',
@@ -732,6 +742,16 @@ async function saveTimesheet(empId, month, entries){ await saveJSON(tsKey(empId,
 
 /* ============================= ATTENDANCE (IN/OUT per day) ============================= */
 function attKey(empId, month){ return `att:${empId}:${month}`; }
+
+/* ============================= PROJECT ACCESS (which projects an employee may pick, per month) ============================= */
+function projAccessKey(empId, month){ return `projaccess:${empId}:${month}`; }
+async function loadProjectAccess(empId, month){ return await loadJSON(projAccessKey(empId,month), true, null); } // null = no restriction (all active projects visible)
+async function saveProjectAccess(empId, month, projectIds){ await saveJSON(projAccessKey(empId,month), true, projectIds); }
+function visibleProjectsFor(access){
+  const activeProjects = state.projects.filter(p=>p.status==='active');
+  if(!access || !access.length) return activeProjects;
+  return activeProjects.filter(p=>access.includes(p.id));
+}
 async function loadAttendance(empId, month){ return await loadJSON(attKey(empId,month), true, []); }
 async function saveAttendance(empId, month, days){ await saveJSON(attKey(empId,month), true, days); }
 function attendanceHoursDiff(inStr, outStr){
@@ -1019,6 +1039,7 @@ function renderShell(app){
     ['gm-approvals',t('navGmApprovals')],
     ['employees',t('navEmployees')],
     ['projects',t('navProjects')],
+    ['project-access',t('navProjectAccess')],
     ['timesheets',t('navTimesheets')],
   ];
   const navItemsEngineer = [
@@ -1028,6 +1049,7 @@ function renderShell(app){
   const navItemsManager = [
     ...navItemsEngineer,
     ['team',t('navTeam')],
+    ['project-access',t('navProjectAccess')],
   ];
   const items = hasFullAccess ? navItemsAdmin : (isManager ? navItemsManager : navItemsEngineer);
 
@@ -1074,11 +1096,13 @@ function renderShell(app){
     else if(state.route==='gm-approvals') renderGmApprovalsPage(main);
     else if(state.route==='employees') renderEmployeesPage(main);
     else if(state.route==='projects') renderProjectsPage(main);
+    else if(state.route==='project-access') renderProjectAccessPage(main);
     else if(state.route==='timesheets') renderAllTimesheetsPage(main);
   } else {
     if(state.route==='my-timesheet') renderMyTimesheet(main);
     else if(state.route==='my-dashboard') renderMyDashboard(main);
     else if(state.route==='team' && isManager) renderTeamApprovalPage(main);
+    else if(state.route==='project-access' && isManager) renderProjectAccessPage(main);
     else renderMyTimesheet(main);
   }
 }
@@ -1403,6 +1427,85 @@ function renderProjectsPage(main){
     });
   }
 }
+/* ============================= PROJECT ACCESS (Admin/GM/Manager: which projects an employee can pick, per month) ============================= */
+async function renderProjectAccessPage(main){
+  const role = state.currentUser.role;
+  const isManager = role==='manager';
+  const scopeEmployees = isManager
+    ? state.employees.filter(e=>e.managerId===state.currentUser.id)
+    : state.employees;
+
+  main.innerHTML = `
+    <h2 class="page-title">${t('projAccessTitle')}</h2>
+    <p class="page-sub">${t('projAccessSub')}</p>
+    ${scopeEmployees.length===0 ? `<div class="panel"><div class="empty-state">${t('noTeamMembers')}</div></div>` : `
+    <div class="panel">
+      <div class="filters-row">
+        <select id="pa-emp"></select>
+        <select id="pa-month">${MONTHS.map(([v])=>`<option value="${v}">${monthLabel(v)}</option>`).join('')}</select>
+        ${!isManager ? `<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);"><input type="checkbox" id="pa-show-resigned"/> ${t('showResigned')}</label>` : ''}
+      </div>
+    </div>
+    <div class="panel">
+      <div id="pa-status" style="font-size:12.5px;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:10px;margin-bottom:12px;">
+        <button class="btn btn-sm" id="pa-select-all">${t('selectAllBtn')}</button>
+        <button class="btn btn-sm" id="pa-clear-all">${t('clearAllBtn')}</button>
+      </div>
+      <div id="pa-projects-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;"></div>
+      <button class="btn btn-solid" id="pa-save" style="margin-top:16px;">${t('save')}</button>
+    </div>
+    `}
+  `;
+  if(scopeEmployees.length===0) return;
+
+  const empSel = document.getElementById('pa-emp');
+  const monthSel = document.getElementById('pa-month');
+  const showResignedChk = document.getElementById('pa-show-resigned');
+  monthSel.value = currentDefaultMonth();
+
+  function rebuildEmpOptions(){
+    const prev = empSel.value;
+    const list = scopeEmployees.filter(e=> (showResignedChk && showResignedChk.checked) || !e.resignDate)
+      .slice().sort((a,b)=> (a.name||'').localeCompare(b.name||''));
+    empSel.innerHTML = list.map(e=>`<option value="${e.id}">${e.code?e.code+' — ':''}${e.name} (${deptName(e.department)})</option>`).join('');
+    if(list.some(e=>e.id===prev)) empSel.value = prev;
+  }
+  rebuildEmpOptions();
+  empSel.onchange = draw;
+  monthSel.onchange = draw;
+  if(showResignedChk) showResignedChk.onchange = ()=>{ rebuildEmpOptions(); draw(); };
+  document.getElementById('pa-select-all').onclick = ()=>{
+    document.querySelectorAll('#pa-projects-list input[type=checkbox]').forEach(c=>c.checked=true);
+  };
+  document.getElementById('pa-clear-all').onclick = ()=>{
+    document.querySelectorAll('#pa-projects-list input[type=checkbox]').forEach(c=>c.checked=false);
+  };
+  document.getElementById('pa-save').onclick = async ()=>{
+    const checked = Array.from(document.querySelectorAll('#pa-projects-list input[type=checkbox]:checked')).map(c=>c.value);
+    // Empty selection means "no restriction — all active projects visible", matching the default.
+    await saveProjectAccess(empSel.value, monthSel.value, checked.length ? checked : null);
+    toast(t('savedToast'));
+    draw();
+  };
+  draw();
+
+  async function draw(){
+    const access = await loadProjectAccess(empSel.value, monthSel.value);
+    const statusEl = document.getElementById('pa-status');
+    statusEl.innerHTML = access
+      ? `<span class="badge" style="background:var(--amber)22;color:var(--amber);">${t('customListActiveLbl')} (${access.length})</span>`
+      : `<span class="badge" style="background:var(--green)22;color:var(--green);">${t('noRestrictionLbl')}</span>`;
+    const activeProjects = state.projects.filter(p=>p.status==='active');
+    const list = document.getElementById('pa-projects-list');
+    list.innerHTML = activeProjects.map(p=>`
+      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;padding:6px 8px;border:1px solid var(--line-soft);border-radius:6px;">
+        <input type="checkbox" value="${p.id}" ${access && access.includes(p.id) ? 'checked' : ''}/>
+        <span>${p.code?p.code+' — ':''}${p.name}</span>
+      </label>`).join('') || `<div class="empty-state">${t('noPrj')}</div>`;
+  }
+}
+
 function openProjectModal(prj){
   const isNew = !prj;
   prj = prj || {id:uid('prj'), code:'', name:'', status:'active', client:'', location:'', startDate:'',
@@ -3094,7 +3197,7 @@ async function renderMyTimesheet(main){
       </div>
       <div class="row2">
         <div class="field" id="e-prj-wrap"><label>${t('thProject')}</label>
-          <select id="e-prj">${state.projects.filter(p=>p.status==='active').map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select>
+          <select id="e-prj"></select>
         </div>
         <div class="field"><label>${t('hoursCount')}</label><input type="number" id="e-hours" min="0.5" step="0.5" value="8"/></div>
       </div>
@@ -3121,12 +3224,21 @@ async function renderMyTimesheet(main){
   monthSel.value = currentDefaultMonth();
   document.getElementById('e-date').value = new Date().toISOString().slice(0,10);
   updateDateHint();
+  async function rebuildProjectOptions(){
+    const access = await loadProjectAccess(emp.id, monthSel.value);
+    const list = visibleProjectsFor(access);
+    const prjSel = document.getElementById('e-prj');
+    const prev = prjSel.value;
+    prjSel.innerHTML = list.map(p=>`<option value="${p.id}">${p.name}</option>`).join('') || `<option value="">${t('noPrjAvailable')}</option>`;
+    if(list.some(p=>p.id===prev)) prjSel.value = prev;
+  }
+  rebuildProjectOptions();
   document.getElementById('e-type').onchange = (e)=>{
     document.getElementById('e-prj-wrap').style.display = e.target.value==='project' ? '' : 'none';
     document.getElementById('e-task-wrap').style.display = e.target.value==='free' ? 'none' : '';
   };
   document.getElementById('e-task-wrap').style.display = document.getElementById('e-type').value==='free' ? 'none' : '';
-  monthSel.onchange = draw;
+  monthSel.onchange = ()=>{ rebuildProjectOptions(); draw(); };
   document.getElementById('e-add').onclick = addEntry;
   document.getElementById('e-date').onchange = updateDateHint;
   draw();
@@ -3173,6 +3285,11 @@ async function renderMyTimesheet(main){
     }
     if(!dateInFiscalRange(localDate, monthSel.value)){ alert(t('dateOutOfMonth')+' '+monthLabel(monthSel.value)+' ('+fiscalRangeLabel(monthSel.value)+')'); return; }
     if(type==='project' && !projectId){ alert(t('chooseProject')); return; }
+    if(type==='project'){
+      const access = await loadProjectAccess(emp.id, monthSel.value);
+      const allowed = visibleProjectsFor(access);
+      if(!allowed.some(p=>p.id===projectId)){ alert(t('projectNotAllowed')); return; }
+    }
     const entries = await loadTimesheet(emp.id, monthSel.value);
     entries.push({id:uid('e'), date, type, projectId, task, hours, location:loc, approved:false, approvedBy:null, approvedAt:null});
     await saveTimesheet(emp.id, monthSel.value, entries);
