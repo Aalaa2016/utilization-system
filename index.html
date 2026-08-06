@@ -850,9 +850,9 @@ async function resetDemoData(){
   await saveJSON('employees', true, state.employees);
   await saveJSON('projects', true, state.projects);
   const tsKeys = await listKeys('ts:', true);
-  for(const k of tsKeys){ await deleteKey(k, true); }
+  await Promise.all(tsKeys.map(k=>deleteKey(k, true)));
   const apprKeys = await listKeys('dataappr:', true);
-  for(const k of apprKeys){ await deleteKey(k, true); }
+  await Promise.all(apprKeys.map(k=>deleteKey(k, true)));
   toast(t('demoResetToast'));
   render();
 }
@@ -1020,10 +1020,8 @@ async function loadAllTimesheetsForMonth(month){
   const keys = await listKeys('ts:', true);
   const relevant = keys.filter(k => k.endsWith(':'+month));
   const out = {};
-  for(const k of relevant){
-    const empId = k.split(':')[1];
-    out[empId] = await loadJSON(k, true, []);
-  }
+  const results = await Promise.all(relevant.map(k => loadJSON(k, true, [])));
+  relevant.forEach((k, idx) => { out[k.split(':')[1]] = results[idx]; });
   return out;
 }
 
@@ -2473,12 +2471,16 @@ async function renderCapEmployeesView(main){
     const perEmpAgg = {};
     employees.forEach(e=>{ perEmpAgg[e.id] = {emp:e, target:0, available:0, effective:0, training:0, idle:0, cost:0}; });
 
-    for(const month of monthsRange){
-      const [targets, approvedMap, allEntries] = await Promise.all([
+    // Fetch every month's data in parallel (was: one month at a time, sequentially — much slower)
+    const perMonthData = await Promise.all(monthsRange.map(month =>
+      Promise.all([
         loadAllTargetsForMonth(empIds, month),
         loadAllApprovedForMonth(empIds, month),
         loadAllTimesheetsForMonth(month),
-      ]);
+      ]).then(([targets, approvedMap, allEntries]) => ({month, targets, approvedMap, allEntries}))
+    ));
+
+    for(const {month, targets, approvedMap, allEntries} of perMonthData){
       employees.forEach(e=>{
         if(!employeeCountsInMonth(e, month)) return; // not employed during this month (pre-hire or post-resignation) — not counted
         const entries = allEntries[e.id] || [];
@@ -2670,8 +2672,9 @@ async function renderCapProjectsView(main){
     // aggregate hours/cost per project (and per project+department) across the range
     const perPrjAgg = {};
     state.projects.forEach(p=>{ perPrjAgg[p.id] = {prj:p, hours:0, cost:0, byDept:{}}; });
-    for(const month of monthsRange){
-      const allEntries = await loadAllTimesheetsForMonth(month);
+    const allMonthsEntries = await Promise.all(monthsRange.map(month => loadAllTimesheetsForMonth(month)));
+    monthsRange.forEach((month, idx)=>{
+      const allEntries = allMonthsEntries[idx];
       state.employees.filter(e=>employeeCountsInMonth(e, month)).forEach(e=>{
         const entries = allEntries[e.id] || [];
         entries.forEach(en=>{
@@ -2686,7 +2689,7 @@ async function renderCapProjectsView(main){
           }
         });
       });
-    }
+    });
 
     if(!prjFilter){
       // All projects summary table
@@ -3010,7 +3013,7 @@ async function renderAttendancePage(main){
         return;
       }
       let totalDays = 0;
-      for(const empId of empIds){
+      await Promise.all(empIds.map(async empId=>{
         const newDays = byEmp[empId].map(d=>({...d, status:'present'}));
         const existing = await loadAttendance(empId, monthSel.value);
         const newDates = new Set(newDays.map(d=>d.date));
@@ -3018,7 +3021,7 @@ async function renderAttendancePage(main){
         await saveAttendance(empId, monthSel.value, merged);
         await syncAttendanceToMonthlyData(empId, monthSel.value);
         totalDays += newDays.length;
-      }
+      }));
       resultBox.innerHTML = `<span class="badge" style="background:#2F7FD422;color:#2F7FD4;">${t('importedAttendanceDays')} ${totalDays} (${empIds.length})</span>`;
       draw();
     }catch(e){
@@ -3163,25 +3166,32 @@ async function renderMonthlyDataPage(main){
     const rows = document.querySelectorAll('#md-table tbody tr[data-emp]');
     const now = new Date().toISOString();
     const approverName = state.currentUser.name;
-    for(const row of rows){
-      const empId = row.getAttribute('data-emp');
-      const target = Number(row.querySelector('input[data-target]').value)||0;
-      const approved = Number(row.querySelector('input[data-approved]').value)||0;
-      const annual = Number(row.querySelector('input[data-annual]').value)||0;
-      const unpaid = Number(row.querySelector('input[data-unpaid]').value)||0;
-      const holiday = Number(row.querySelector('input[data-holiday]').value)||0;
-      const sick = Number(row.querySelector('input[data-sick]').value)||0;
-      await saveTargetOverride(empId, monthSel.value, target);
-      await saveApprovedHours(empId, monthSel.value, approved);
-      await saveNote(empId, monthSel.value, {annual, unpaid, holiday, sick});
-      // Admin/GM Save All records and fully approves the month in one step —
-      // it does not require the direct manager to have approved it first.
-      await approveAllEntries(empId, monthSel.value, approverName);
-      await saveDataApproval(empId, monthSel.value, {
-        status:'gm_approved',
-        managerApprovedBy: approverName, managerApprovedAt: now,
-        gmApprovedBy: approverName, gmApprovedAt: now,
-      });
+    document.getElementById('md-save-all').disabled = true;
+    try{
+      await Promise.all([...rows].map(async row=>{
+        const empId = row.getAttribute('data-emp');
+        const target = Number(row.querySelector('input[data-target]').value)||0;
+        const approved = Number(row.querySelector('input[data-approved]').value)||0;
+        const annual = Number(row.querySelector('input[data-annual]').value)||0;
+        const unpaid = Number(row.querySelector('input[data-unpaid]').value)||0;
+        const holiday = Number(row.querySelector('input[data-holiday]').value)||0;
+        const sick = Number(row.querySelector('input[data-sick]').value)||0;
+        // Admin/GM Save All records and fully approves the month in one step —
+        // it does not require the direct manager to have approved it first.
+        await Promise.all([
+          saveTargetOverride(empId, monthSel.value, target),
+          saveApprovedHours(empId, monthSel.value, approved),
+          saveNote(empId, monthSel.value, {annual, unpaid, holiday, sick}),
+          approveAllEntries(empId, monthSel.value, approverName),
+          saveDataApproval(empId, monthSel.value, {
+            status:'gm_approved',
+            managerApprovedBy: approverName, managerApprovedAt: now,
+            gmApprovedBy: approverName, gmApprovedAt: now,
+          }),
+        ]);
+      }));
+    } finally {
+      document.getElementById('md-save-all').disabled = false;
     }
     toast(t('savedAllApprovedToast'));
     draw();
