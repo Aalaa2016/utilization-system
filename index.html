@@ -120,6 +120,29 @@
   .icon-btn{background:transparent;border:none;color:var(--muted);font-size:14px;padding:4px 6px;}
   .icon-btn:hover{color:var(--cyan);}
   .empty-state{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;}
+
+  /* ---- Kanban board (Task Management) ---- */
+  .kanban-board{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start;}
+  @media(max-width:900px){.kanban-board{grid-template-columns:1fr;}}
+  .kanban-col{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:10px;min-height:120px;}
+  .kanban-col.drag-over{outline:2px dashed var(--cyan);outline-offset:-2px;}
+  .kanban-col-title{font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+  .kanban-card{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:10px 12px;margin-bottom:10px;cursor:grab;box-shadow:0 1px 2px rgba(18,35,71,.06);}
+  .kanban-card:active{cursor:grabbing;}
+  .kanban-card.dragging{opacity:.4;}
+  .kanban-card-title{font-size:13px;font-weight:600;margin-bottom:6px;}
+  .kanban-card-meta{font-size:11px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;}
+  .kanban-card-actions{display:flex;gap:6px;margin-top:8px;}
+  .kanban-card-actions button{font-size:11px;padding:3px 8px;}
+
+  /* ---- Notifications bell ---- */
+  .notif-bell-wrap{position:relative;}
+  .notif-bell-btn{position:relative;background:transparent;border:1px solid var(--line);border-radius:16px;padding:6px 10px;font-size:15px;line-height:1;cursor:pointer;}
+  .notif-dot{position:absolute;top:-4px;inset-inline-end:-4px;background:var(--rose);color:#fff;font-size:10px;font-weight:700;border-radius:10px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 3px;}
+  .notif-panel{position:absolute;top:calc(100% + 8px);inset-inline-end:0;width:320px;max-height:400px;overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:6px;box-shadow:0 8px 28px rgba(18,35,71,.18);z-index:60;padding:8px;}
+  .notif-item{padding:8px 10px;border-radius:4px;font-size:12px;border-bottom:1px solid var(--line-soft);}
+  .notif-item:last-child{border-bottom:none;}
+  .notif-item-title{font-weight:600;margin-bottom:3px;}
   .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--cyan);color:var(--text);padding:10px 20px;border-radius:4px;font-size:13px;z-index:100;}
   ::-webkit-scrollbar{width:8px;height:8px;}
   ::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
@@ -247,6 +270,18 @@ const ATTENDANCE_STATUSES = {
   sick:{label_ar:'إجازة مرضية', label_en:'Sick Leave', color:'#C98A2E'},
   holiday:{label_ar:'إجازة رسمية', label_en:'Official Holiday', color:'#9B6FCF'},
 };
+const TASK_STATUSES = {
+  todo:{label_ar:'قيد الانتظار', label_en:'To Do', color:'#7C93A8'},
+  inprogress:{label_ar:'قيد التنفيذ', label_en:'In Progress', color:'#E8A94F'},
+  done:{label_ar:'مكتمل', label_en:'Done', color:'#2FA36B'},
+};
+const TASK_STATUS_ORDER = ['todo','inprogress','done'];
+const TASK_PRIORITIES = {
+  low:{label_ar:'منخفضة', label_en:'Low', color:'#7C93A8'},
+  medium:{label_ar:'متوسطة', label_en:'Medium', color:'#E8A94F'},
+  high:{label_ar:'عالية', label_en:'High', color:'#D65C73'},
+};
+const ALERT_DAYS_THRESHOLD = 3; // days before due/deadline to start warning
 const DEFAULT_TARGET_FULLTIME = 198;
 const EMP_STATUSES = [
   {id:'standby',         label_ar:'استعداد (Standby)',   label_en:'Standby',            color:'#C98A2E'},
@@ -305,6 +340,34 @@ function approvalStatusBadge(status){
   return `<span style="color:var(--amber)">● ${t('apprPending')}</span>`;
 }
 function entryLabel(type){ const e=ENTRY_TYPES[type]; return state.lang==='en' ? e.label_en : e.label_ar; }
+function taskStatusLabel(s){ const x=TASK_STATUSES[s]||TASK_STATUSES.todo; return state.lang==='en' ? x.label_en : x.label_ar; }
+function taskPriorityLabel(p){ const x=TASK_PRIORITIES[p]||TASK_PRIORITIES.medium; return state.lang==='en' ? x.label_en : x.label_ar; }
+function todayDateStr(){ return new Date().toISOString().slice(0,10); }
+function daysUntil(dateStr){
+  if(!dateStr) return null;
+  const [y,m,d] = dateStr.split('-').map(Number);
+  if(!y||!m||!d) return null;
+  const target = new Date(y, m-1, d);
+  const now = new Date(); const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((target - today) / (1000*60*60*24));
+}
+// Returns null if no deadline set or already fully complete; otherwise {overdue, daysLeft, atRisk}
+function deadlineRisk(dateStr, isComplete){
+  if(!dateStr || isComplete) return null;
+  const daysLeft = daysUntil(dateStr);
+  if(daysLeft===null) return null;
+  const overdue = daysLeft < 0;
+  const atRisk = overdue || daysLeft <= ALERT_DAYS_THRESHOLD;
+  return {overdue, daysLeft, atRisk};
+}
+function riskBadgeHTML(risk){
+  if(!risk || !risk.atRisk) return '';
+  const color = risk.overdue ? 'var(--rose)' : 'var(--amber)';
+  const label = risk.overdue
+    ? `${t('overdueByLbl')} ${Math.abs(risk.daysLeft)} ${t('daysLbl')}`
+    : (risk.daysLeft===0 ? t('dueTodayLbl') : `${t('daysLeftLbl')} ${risk.daysLeft} ${t('daysLbl')}`);
+  return `<span class="badge" style="background:${color}22;color:${color};border:1px solid ${color}55;margin-inline-start:6px;">⏰ ${label}</span>`;
+}
 function monthLabel(v){ const m=MONTHS.find(x=>x[0]===v); if(!m) return v; return state.lang==='en' ? m[2] : m[1]; }
 function locLabel(loc){ return t(loc==='onsite' ? 'onsite' : 'remote'); }
 function fmt(n){return (Math.round(n*10)/10).toLocaleString('en-US');}
@@ -470,6 +533,27 @@ const I18N = {
     attStatus:'حالة اليوم',
     availableToDistribute:'المتاح للتوزيع',
     downloadTemplateBtn:'تنزيل نموذج إكسل',
+
+    navTasks:'إدارة المهام', navTeamTasks:'مهام الفريق', navMyTasks:'مهامي',
+    taskMgmtTitle:'إدارة المهام', taskMgmtSubAll:'أضف مهام لأي موظف في أي فريق، وتابع تقدم كل التاسكات',
+    taskMgmtSubTeam:'أضف مهام لفريقك وتابع تقدمها', myTasksTitle:'مهامي', myTasksSub:'تابع المهام المسندة ليك وحرّك حالتها',
+    addTaskBtn:'+ إضافة مهمة', editTaskTitle:'تعديل مهمة', addTaskTitle:'إضافة مهمة جديدة',
+    taskTitleLbl:'عنوان المهمة', taskDescLbl:'وصف المهمة (اختياري)',
+    assigneeLbl:'الموظف المسؤول', monthLbl:'الشهر', hoursAllocatedLbl:'عدد الساعات المخصصة',
+    priorityLbl:'الأولوية', dueDateLbl:'تاريخ الاستحقاق (اختياري)', prjDeadlineLbl:'تاريخ تسليم المشروع (اختياري)',
+    priorityLow:'منخفضة', priorityMedium:'متوسطة', priorityHigh:'عالية',
+    statusTodo:'قيد الانتظار', statusInProgress:'قيد التنفيذ', statusDone:'مكتمل',
+    fillTaskTitleAssignee:'من فضلك أدخل عنوان المهمة، اختار المشروع، والموظف المسؤول',
+    taskAdded:'تم إضافة المهمة', taskUpdated:'تم تحديث المهمة', taskDeleted:'تم حذف المهمة',
+    confirmDeleteTask:'متأكد من حذف هذه المهمة؟',
+    noTasksYet:'لا توجد مهام مضافة بعد', moveToLbl:'نقل إلى',
+    hoursLoggedLbl:'ساعات مسجلة', ofLbl:'من', assignedByLbl:'أضافها',
+    overdueByLbl:'متأخر', daysLeftLbl:'باقي', daysLbl:'يوم', dueTodayLbl:'مستحق اليوم',
+    notifBellTitle:'التنبيهات', noAlertsYet:'مفيش تنبيهات دلوقتي 👍',
+    alertTaskOverdue:'مهمة متأخرة', alertTaskDue:'مهمة قريبة من الاستحقاق',
+    alertPrjOverdue:'مشروع متأخر عن التسليم', alertPrjDue:'مشروع قريب من التسليم',
+    selectAssignedTaskLbl:'اختر من المهام المسندة (اختياري)', noAssignedTaskOpt:'— بدون اختيار —',
+    linkedTaskProgressLbl:'الساعات المسجلة على المهمة دي',
   },
   en: {
     appTitle:'WENPRO',
@@ -628,6 +712,27 @@ const I18N = {
     attStatus:'Day Status',
     availableToDistribute:'Available to Distribute',
     downloadTemplateBtn:'Download Excel Template',
+
+    navTasks:'Task Management', navTeamTasks:'Team Tasks', navMyTasks:'My Tasks',
+    taskMgmtTitle:'Task Management', taskMgmtSubAll:'Add tasks for any employee in any team, and track progress across all tasks',
+    taskMgmtSubTeam:'Add tasks for your team and track their progress', myTasksTitle:'My Tasks', myTasksSub:'Track tasks assigned to you and update their status',
+    addTaskBtn:'+ Add Task', editTaskTitle:'Edit Task', addTaskTitle:'Add New Task',
+    taskTitleLbl:'Task Title', taskDescLbl:'Task Description (optional)',
+    assigneeLbl:'Assignee', monthLbl:'Month', hoursAllocatedLbl:'Allocated Hours',
+    priorityLbl:'Priority', dueDateLbl:'Due Date (optional)', prjDeadlineLbl:'Project Deadline (optional)',
+    priorityLow:'Low', priorityMedium:'Medium', priorityHigh:'High',
+    statusTodo:'To Do', statusInProgress:'In Progress', statusDone:'Done',
+    fillTaskTitleAssignee:'Please enter a task title, choose a project, and an assignee',
+    taskAdded:'Task added', taskUpdated:'Task updated', taskDeleted:'Task deleted',
+    confirmDeleteTask:'Are you sure you want to delete this task?',
+    noTasksYet:'No tasks added yet', moveToLbl:'Move to',
+    hoursLoggedLbl:'Hours logged', ofLbl:'of', assignedByLbl:'Assigned by',
+    overdueByLbl:'Overdue by', daysLeftLbl:'Days left', daysLbl:'days', dueTodayLbl:'Due today',
+    notifBellTitle:'Notifications', noAlertsYet:'No alerts right now 👍',
+    alertTaskOverdue:'Overdue task', alertTaskDue:'Task due soon',
+    alertPrjOverdue:'Project overdue', alertPrjDue:'Project deadline approaching',
+    selectAssignedTaskLbl:'Select from assigned tasks (optional)', noAssignedTaskOpt:'— No selection —',
+    linkedTaskProgressLbl:'Hours logged against this task',
   }
 };
 function t(key){ return (I18N[state.lang] && I18N[state.lang][key]) || key; }
@@ -769,6 +874,111 @@ function visibleProjectsFor(access){
   if(!access || !access.length) return activeProjects;
   return activeProjects.filter(p=>access.includes(p.id));
 }
+/* ============================= TASKS (Task Management — Trello-like) ============================= */
+function taskKey(id){ return `task:${id}`; }
+async function loadAllTasks(){
+  const keys = await listKeys('task:', true);
+  const tasks = await Promise.all(keys.map(k=>loadJSON(k, true, null)));
+  return tasks.filter(Boolean).sort((a,b)=> (b.createdAt||'').localeCompare(a.createdAt||''));
+}
+async function saveTask(task){ await saveJSON(taskKey(task.id), true, task); }
+async function deleteTaskById(id){ await deleteKey(taskKey(id), true); }
+function tasksForEmployee(tasks, empId){ return tasks.filter(x=>x.assigneeId===empId); }
+function tasksForManagerTeam(tasks, managerId){
+  const teamIds = state.employees.filter(e=>e.managerId===managerId).map(e=>e.id);
+  return tasks.filter(x=>teamIds.includes(x.assigneeId));
+}
+async function loggedHoursForTask(task){
+  if(!task || !task.assigneeId || !task.month) return 0;
+  const entries = await loadTimesheet(task.assigneeId, task.month);
+  return entries.filter(e=>e.taskId===task.id).reduce((a,e)=>a+Number(e.hours||0),0);
+}
+// Builds the list of at-risk alerts (overdue or approaching deadline) relevant to the current user's role.
+async function computeAlertsForCurrentUser(){
+  const user = state.currentUser;
+  if(!user) return [];
+  const role = user.role;
+  const hasFullAccess = role==='admin' || role==='gm';
+  const isManager = role==='manager';
+  const alerts = [];
+
+  let tasks = await loadAllTasks();
+  if(hasFullAccess){ /* all tasks */ }
+  else if(isManager){ tasks = tasksForManagerTeam(tasks, user.id); }
+  else { tasks = tasksForEmployee(tasks, user.id); }
+
+  for(const task of tasks){
+    const risk = deadlineRisk(task.dueDate, task.status==='done');
+    if(risk && risk.atRisk){
+      const assignee = state.employees.find(e=>e.id===task.assigneeId);
+      alerts.push({
+        type:'task', overdue:risk.overdue, daysLeft:risk.daysLeft,
+        title: task.title,
+        sub: assignee ? assignee.name : '',
+      });
+    }
+  }
+
+  if(hasFullAccess){
+    for(const p of state.projects){
+      if(p.status!=='active') continue;
+      const risk = deadlineRisk(p.deadline, Number(p.progress)>=100);
+      if(risk && risk.atRisk){
+        alerts.push({type:'project', overdue:risk.overdue, daysLeft:risk.daysLeft, title:p.name, sub:''});
+      }
+    }
+  }
+
+  alerts.sort((a,b)=> a.daysLeft - b.daysLeft);
+  return alerts;
+}
+function renderAlertItem(a){
+  const color = a.overdue ? 'var(--rose)' : 'var(--amber)';
+  const kindLabel = a.type==='task'
+    ? (a.overdue ? t('alertTaskOverdue') : t('alertTaskDue'))
+    : (a.overdue ? t('alertPrjOverdue') : t('alertPrjDue'));
+  const timeLabel = a.overdue
+    ? `${t('overdueByLbl')} ${Math.abs(a.daysLeft)} ${t('daysLbl')}`
+    : (a.daysLeft===0 ? t('dueTodayLbl') : `${t('daysLeftLbl')} ${a.daysLeft} ${t('daysLbl')}`);
+  return `
+    <div class="notif-item">
+      <div class="notif-item-title" style="color:${color};">${a.type==='task'?'📋':'📁'} ${kindLabel}</div>
+      <div>${a.title}${a.sub?` — ${a.sub}`:''}</div>
+      <div style="color:${color};margin-top:3px;">${timeLabel}</div>
+    </div>`;
+}
+async function refreshNotifBell(){
+  const btn = document.getElementById('notif-bell-btn');
+  if(!btn) return;
+  const alerts = await computeAlertsForCurrentUser();
+  const existingDot = btn.querySelector('.notif-dot');
+  if(existingDot) existingDot.remove();
+  if(alerts.length){
+    const dot = document.createElement('span');
+    dot.className='notif-dot';
+    dot.textContent = alerts.length>99 ? '99+' : String(alerts.length);
+    btn.appendChild(dot);
+  }
+  btn.dataset.alertsCache = JSON.stringify(alerts);
+}
+function toggleNotifPanel(){
+  const existing = document.getElementById('notif-panel');
+  if(existing){ existing.remove(); return; }
+  const btn = document.getElementById('notif-bell-btn');
+  const alerts = JSON.parse(btn.dataset.alertsCache || '[]');
+  const panel = document.createElement('div');
+  panel.className='notif-panel'; panel.id='notif-panel';
+  panel.innerHTML = alerts.length
+    ? alerts.map(renderAlertItem).join('')
+    : `<div class="empty-state" style="padding:20px;">${t('noAlertsYet')}</div>`;
+  document.getElementById('notif-bell-wrap').appendChild(panel);
+  setTimeout(()=>{
+    document.addEventListener('click', function closeOnce(ev){
+      if(!panel.contains(ev.target) && ev.target!==btn){ panel.remove(); document.removeEventListener('click', closeOnce); }
+    });
+  },0);
+}
+
 async function loadAttendance(empId, month){ return await loadJSON(attKey(empId,month), true, []); }
 async function saveAttendance(empId, month, days){ await saveJSON(attKey(empId,month), true, days); }
 function attendanceHoursDiff(inStr, outStr){
@@ -1057,16 +1267,19 @@ function renderShell(app){
     ['employees',t('navEmployees')],
     ['projects',t('navProjects')],
     ['project-access',t('navProjectAccess')],
+    ['tasks',t('navTasks')],
     ['timesheets',t('navTimesheets')],
   ];
   const navItemsEngineer = [
     ['my-timesheet',t('navMyTimesheet')],
     ['my-dashboard',t('navMyDashboard')],
+    ['my-tasks',t('navMyTasks')],
   ];
   const navItemsManager = [
     ...navItemsEngineer,
     ['team',t('navTeam')],
     ['project-access',t('navProjectAccess')],
+    ['tasks',t('navTeamTasks')],
   ];
   const items = hasFullAccess ? navItemsAdmin : (isManager ? navItemsManager : navItemsEngineer);
 
@@ -1080,6 +1293,9 @@ function renderShell(app){
         <div class="lang-switch-top">
           <button class="lang-btn-sm ${state.lang==='ar'?'active':''}" id="lang-ar-top" title="العربية">${FLAG_EG}</button>
           <button class="lang-btn-sm ${state.lang==='en'?'active':''}" id="lang-en-top" title="English">${FLAG_US}</button>
+        </div>
+        <div class="notif-bell-wrap" id="notif-bell-wrap">
+          <button class="notif-bell-btn" id="notif-bell-btn" title="${t('notifBellTitle')}">🔔</button>
         </div>
         <span>${state.currentUser.name}</span>
         ${state.currentUser.department ? `<span class="badge" style="background:${deptOf(state.currentUser.department).color}22;color:${deptOf(state.currentUser.department).color};border:1px solid ${deptOf(state.currentUser.department).color}55">${state.currentUser.department}</span>` : ''}
@@ -1097,6 +1313,8 @@ function renderShell(app){
   document.getElementById('change-pass-btn').onclick = openChangePasswordModal;
   document.getElementById('lang-ar-top').onclick = ()=>setLang('ar');
   document.getElementById('lang-en-top').onclick = ()=>setLang('en');
+  document.getElementById('notif-bell-btn').onclick = (ev)=>{ ev.stopPropagation(); toggleNotifPanel(); };
+  refreshNotifBell();
   const sb = document.getElementById('sidebar');
   sb.innerHTML = `
     <div>${items.map(([r,label])=>`<button class="nav-item ${state.route===r?'active':''}" data-r="${r}">${label}</button>`).join('')}</div>
@@ -1114,12 +1332,15 @@ function renderShell(app){
     else if(state.route==='employees') renderEmployeesPage(main);
     else if(state.route==='projects') renderProjectsPage(main);
     else if(state.route==='project-access') renderProjectAccessPage(main);
+    else if(state.route==='tasks') renderTasksBoardPage(main);
     else if(state.route==='timesheets') renderAllTimesheetsPage(main);
   } else {
     if(state.route==='my-timesheet') renderMyTimesheet(main);
     else if(state.route==='my-dashboard') renderMyDashboard(main);
+    else if(state.route==='my-tasks') renderMyTasksPage(main);
     else if(state.route==='team' && isManager) renderTeamApprovalPage(main);
     else if(state.route==='project-access' && isManager) renderProjectAccessPage(main);
+    else if(state.route==='tasks' && isManager) renderTasksBoardPage(main);
     else renderMyTimesheet(main);
   }
 }
@@ -1422,7 +1643,7 @@ function renderProjectsPage(main){
           <td>${p.client||'—'}</td>
           <td>${p.location||'—'}</td>
           <td>${p.status==='active'?`<span style="color:var(--green)">${t('statusActive')}</span>`:`<span style="color:var(--muted)">${t('closed')}</span>`}</td>
-          <td class="mono">${p.progress!==undefined && p.progress!==null && p.progress!=='' ? p.progress+'%' : '—'}</td>
+          <td class="mono">${p.progress!==undefined && p.progress!==null && p.progress!=='' ? p.progress+'%' : '—'}${riskBadgeHTML(deadlineRisk(p.deadline, Number(p.progress)>=100))}</td>
           <td>
             <button class="icon-btn" data-p="${p.id}" data-a="edit">${t('edit')}</button>
             <button class="icon-btn" data-p="${p.id}" data-a="del" style="color:var(--rose)">${t('del')}</button>
@@ -1527,7 +1748,7 @@ function openProjectModal(prj){
   const isNew = !prj;
   prj = prj || {id:uid('prj'), code:'', name:'', status:'active', client:'', location:'', startDate:'',
     plannedDuration:'', plannedDurationUnit:'months', scope:'', description:'', plannedManHours:'',
-    plannedManHoursByDept:{}, projectLead:'', structuralLead:'', progress:''};
+    plannedManHoursByDept:{}, projectLead:'', structuralLead:'', progress:'', deadline:''};
   const byDept = prj.plannedManHoursByDept || {};
   const backdrop = document.createElement('div');
   backdrop.className='modal-backdrop';
@@ -1564,7 +1785,10 @@ function openProjectModal(prj){
         <div class="field"><label>${t('prjLead')}</label><input id="p-lead" value="${prj.projectLead||''}"/></div>
         <div class="field"><label>${t('prjStructuralLead')}</label><input id="p-struct-lead" value="${prj.structuralLead||''}"/></div>
       </div>
-      <div class="field"><label>${t('prjProgress')} (%)</label><input id="p-progress" type="number" min="0" max="100" value="${prj.progress!==undefined&&prj.progress!==null?prj.progress:''}"/></div>
+      <div class="row2">
+        <div class="field"><label>${t('prjProgress')} (%)</label><input id="p-progress" type="number" min="0" max="100" value="${prj.progress!==undefined&&prj.progress!==null?prj.progress:''}"/></div>
+        <div class="field"><label>${t('prjDeadlineLbl')}</label><input id="p-deadline" type="date" value="${prj.deadline||''}"/></div>
+      </div>
 
       <div class="field">
         <label>${t('prjPlannedManHours')}</label>
@@ -1609,6 +1833,7 @@ function openProjectModal(prj){
       projectLead: document.getElementById('p-lead').value.trim(),
       structuralLead: document.getElementById('p-struct-lead').value.trim(),
       progress: document.getElementById('p-progress').value!=='' ? Number(document.getElementById('p-progress').value) : '',
+      deadline: document.getElementById('p-deadline').value || '',
       plannedManHours: document.getElementById('p-mh-total').value ? Number(document.getElementById('p-mh-total').value) : '',
       plannedManHoursByDept,
     };
@@ -1619,6 +1844,243 @@ function openProjectModal(prj){
     toast(t('savedToast'));
     render();
   };
+}
+
+/* ============================= TASK MANAGEMENT (Trello-like board) ============================= */
+// Used by Admin/GM (scope: all employees) and Manager (scope: own team only)
+async function renderTasksBoardPage(main){
+  const role = state.currentUser.role;
+  const hasFullAccess = role==='admin' || role==='gm';
+  const isManager = role==='manager';
+  const scopeEmployees = hasFullAccess
+    ? state.employees.filter(e=>!e.resignDate)
+    : state.employees.filter(e=>e.managerId===state.currentUser.id && !e.resignDate);
+  const activeProjects = state.projects.filter(p=>p.status==='active');
+
+  main.innerHTML = `
+    <h2 class="page-title">${t('taskMgmtTitle')}</h2>
+    <p class="page-sub">${hasFullAccess ? t('taskMgmtSubAll') : t('taskMgmtSubTeam')}</p>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
+      <button class="btn btn-solid btn-sm" id="add-task-btn">${t('addTaskBtn')}</button>
+    </div>
+    <div class="kanban-board" id="kanban-board"></div>
+  `;
+  document.getElementById('add-task-btn').onclick = ()=>openTaskModal(null, scopeEmployees, activeProjects, draw);
+  draw();
+
+  async function draw(){
+    const allTasks = await loadAllTasks();
+    const tasks = hasFullAccess ? allTasks : tasksForManagerTeam(allTasks, state.currentUser.id);
+    const board = document.getElementById('kanban-board');
+    board.innerHTML = TASK_STATUS_ORDER.map(status=>{
+      const colTasks = tasks.filter(x=>x.status===status);
+      return `
+        <div class="kanban-col" data-status="${status}">
+          <div class="kanban-col-title"><span>${taskStatusLabel(status)}</span><span class="mono" style="color:var(--muted);">${colTasks.length}</span></div>
+          <div class="kanban-col-body" data-status="${status}">
+            ${colTasks.map(cardHTML).join('') || `<div class="empty-state" style="padding:14px;">${t('noTasksYet')}</div>`}
+          </div>
+        </div>`;
+    }).join('');
+
+    function cardHTML(task){
+      const prj = state.projects.find(p=>p.id===task.projectId);
+      const assignee = state.employees.find(e=>e.id===task.assigneeId);
+      const pr = TASK_PRIORITIES[task.priority] || TASK_PRIORITIES.medium;
+      const risk = deadlineRisk(task.dueDate, task.status==='done');
+      return `
+        <div class="kanban-card" draggable="true" data-task-id="${task.id}">
+          <div class="kanban-card-title">${task.title}</div>
+          <div class="kanban-card-meta">
+            <span class="badge" style="background:var(--cyan)22;color:var(--cyan);">${prj?prj.name:'—'}</span>
+            <span class="badge" style="background:${pr.color}22;color:${pr.color};">${taskPriorityLabel(task.priority)}</span>
+            <span>${assignee?assignee.name:'—'}</span>
+            <span class="mono">${task.hoursAllocated||0}h · ${monthLabel(task.month)}</span>
+            ${task.dueDate ? `<span class="mono">📅 ${task.dueDate}</span>` : ''}
+            ${riskBadgeHTML(risk)}
+          </div>
+          <div class="kanban-card-actions">
+            <button class="btn btn-sm" data-a="edit" data-id="${task.id}">${t('edit')}</button>
+            <button class="btn btn-sm" data-a="del" data-id="${task.id}" style="border-color:var(--rose);color:var(--rose);">${t('del')}</button>
+          </div>
+        </div>`;
+    }
+
+    board.querySelectorAll('[data-a="edit"]').forEach(b=>{
+      b.onclick = async ()=>{
+        const allT = await loadAllTasks();
+        const task = allT.find(x=>x.id===b.dataset.id);
+        openTaskModal(task, scopeEmployees, activeProjects, draw);
+      };
+    });
+    board.querySelectorAll('[data-a="del"]').forEach(b=>{
+      b.onclick = async ()=>{
+        if(!confirm(t('confirmDeleteTask'))) return;
+        await deleteTaskById(b.dataset.id);
+        toast(t('taskDeleted'));
+        draw(); refreshNotifBell();
+      };
+    });
+
+    // Drag & drop between columns
+    let draggedId = null;
+    board.querySelectorAll('.kanban-card').forEach(card=>{
+      card.addEventListener('dragstart', ()=>{ draggedId = card.dataset.taskId; card.classList.add('dragging'); });
+      card.addEventListener('dragend', ()=>{ card.classList.remove('dragging'); });
+    });
+    board.querySelectorAll('.kanban-col').forEach(col=>{
+      col.addEventListener('dragover', (e)=>{ e.preventDefault(); col.classList.add('drag-over'); });
+      col.addEventListener('dragleave', ()=>col.classList.remove('drag-over'));
+      col.addEventListener('drop', async (e)=>{
+        e.preventDefault(); col.classList.remove('drag-over');
+        if(!draggedId) return;
+        const newStatus = col.dataset.status;
+        const allT = await loadAllTasks();
+        const task = allT.find(x=>x.id===draggedId);
+        if(task && task.status!==newStatus){
+          task.status = newStatus;
+          await saveTask(task);
+          draw(); refreshNotifBell();
+        }
+        draggedId = null;
+      });
+    });
+  }
+}
+
+function openTaskModal(task, scopeEmployees, activeProjects, onSaved){
+  const isNew = !task;
+  task = task || {id:uid('task'), title:'', description:'', projectId:'', assigneeId:'', month:currentDefaultMonth(),
+    hoursAllocated:'', priority:'medium', status:'todo', dueDate:'', createdAt:new Date().toISOString(), assignedByName: state.currentUser.name};
+  const backdrop = document.createElement('div');
+  backdrop.className='modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="modal" style="width:480px;">
+      <h3>${isNew?t('addTaskTitle'):t('editTaskTitle')}</h3>
+      <div class="field"><label>${t('taskTitleLbl')}</label><input id="tk-title" value="${task.title||''}"/></div>
+      <div class="field"><label>${t('taskDescLbl')}</label><textarea id="tk-desc" rows="2" style="width:100%;">${task.description||''}</textarea></div>
+      <div class="row2">
+        <div class="field"><label>${t('thProject')}</label>
+          <select id="tk-prj">${activeProjects.map(p=>`<option value="${p.id}" ${task.projectId===p.id?'selected':''}>${p.name}</option>`).join('') || `<option value="">${t('noPrjAvailable')}</option>`}</select>
+        </div>
+        <div class="field"><label>${t('assigneeLbl')}</label>
+          <select id="tk-assignee">${scopeEmployees.map(e=>`<option value="${e.id}" ${task.assigneeId===e.id?'selected':''}>${e.name}</option>`).join('') || `<option value="">—</option>`}</select>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>${t('monthLbl')}</label>
+          <select id="tk-month">${MONTHS.map(([v])=>`<option value="${v}" ${task.month===v?'selected':''}>${monthLabel(v)}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label>${t('hoursAllocatedLbl')}</label><input id="tk-hours" type="number" min="0" step="0.5" value="${task.hoursAllocated||''}"/></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>${t('priorityLbl')}</label>
+          <select id="tk-priority">
+            <option value="low" ${task.priority==='low'?'selected':''}>${t('priorityLow')}</option>
+            <option value="medium" ${task.priority==='medium'?'selected':''}>${t('priorityMedium')}</option>
+            <option value="high" ${task.priority==='high'?'selected':''}>${t('priorityHigh')}</option>
+          </select>
+        </div>
+        <div class="field"><label>${t('dueDateLbl')}</label><input id="tk-due" type="date" value="${task.dueDate||''}"/></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px;">
+        <button class="btn btn-solid" id="tk-save">${t('save')}</button>
+        <button class="btn" id="tk-cancel">${t('cancel')}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(backdrop);
+  document.getElementById('tk-cancel').onclick = ()=>backdrop.remove();
+  document.getElementById('tk-save').onclick = async ()=>{
+    const title = document.getElementById('tk-title').value.trim();
+    const projectId = document.getElementById('tk-prj').value;
+    const assigneeId = document.getElementById('tk-assignee').value;
+    if(!title || !projectId || !assigneeId){ alert(t('fillTaskTitleAssignee')); return; }
+    const updated = {
+      ...task,
+      title,
+      description: document.getElementById('tk-desc').value.trim(),
+      projectId,
+      assigneeId,
+      month: document.getElementById('tk-month').value,
+      hoursAllocated: document.getElementById('tk-hours').value ? Number(document.getElementById('tk-hours').value) : 0,
+      priority: document.getElementById('tk-priority').value,
+      dueDate: document.getElementById('tk-due').value || '',
+    };
+    await saveTask(updated);
+    backdrop.remove();
+    toast(isNew ? t('taskAdded') : t('taskUpdated'));
+    if(onSaved) onSaved();
+    refreshNotifBell();
+  };
+}
+
+// Personal board for engineers (and managers viewing their own assignments): view + drag-to-update-status only, no create/delete.
+async function renderMyTasksPage(main){
+  const emp = state.currentUser;
+  main.innerHTML = `
+    <h2 class="page-title">${t('myTasksTitle')}</h2>
+    <p class="page-sub">${t('myTasksSub')}</p>
+    <div class="kanban-board" id="my-kanban-board"></div>
+  `;
+  draw();
+
+  async function draw(){
+    const allTasks = await loadAllTasks();
+    const tasks = tasksForEmployee(allTasks, emp.id);
+    const board = document.getElementById('my-kanban-board');
+    board.innerHTML = TASK_STATUS_ORDER.map(status=>{
+      const colTasks = tasks.filter(x=>x.status===status);
+      return `
+        <div class="kanban-col" data-status="${status}">
+          <div class="kanban-col-title"><span>${taskStatusLabel(status)}</span><span class="mono" style="color:var(--muted);">${colTasks.length}</span></div>
+          <div class="kanban-col-body" data-status="${status}">
+            ${colTasks.map(cardHTML).join('') || `<div class="empty-state" style="padding:14px;">${t('noTasksYet')}</div>`}
+          </div>
+        </div>`;
+    }).join('');
+
+    function cardHTML(task){
+      const prj = state.projects.find(p=>p.id===task.projectId);
+      const pr = TASK_PRIORITIES[task.priority] || TASK_PRIORITIES.medium;
+      const risk = deadlineRisk(task.dueDate, task.status==='done');
+      return `
+        <div class="kanban-card" draggable="true" data-task-id="${task.id}">
+          <div class="kanban-card-title">${task.title}</div>
+          ${task.description ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">${task.description}</div>` : ''}
+          <div class="kanban-card-meta">
+            <span class="badge" style="background:var(--cyan)22;color:var(--cyan);">${prj?prj.name:'—'}</span>
+            <span class="badge" style="background:${pr.color}22;color:${pr.color};">${taskPriorityLabel(task.priority)}</span>
+            <span class="mono">${task.hoursAllocated||0}h · ${monthLabel(task.month)}</span>
+            ${task.dueDate ? `<span class="mono">📅 ${task.dueDate}</span>` : ''}
+            ${riskBadgeHTML(risk)}
+          </div>
+          ${task.assignedByName ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">${t('assignedByLbl')}: ${task.assignedByName}</div>` : ''}
+        </div>`;
+    }
+
+    let draggedId = null;
+    board.querySelectorAll('.kanban-card').forEach(card=>{
+      card.addEventListener('dragstart', ()=>{ draggedId = card.dataset.taskId; card.classList.add('dragging'); });
+      card.addEventListener('dragend', ()=>{ card.classList.remove('dragging'); });
+    });
+    board.querySelectorAll('.kanban-col').forEach(col=>{
+      col.addEventListener('dragover', (e)=>{ e.preventDefault(); col.classList.add('drag-over'); });
+      col.addEventListener('dragleave', ()=>col.classList.remove('drag-over'));
+      col.addEventListener('drop', async (e)=>{
+        e.preventDefault(); col.classList.remove('drag-over');
+        if(!draggedId) return;
+        const newStatus = col.dataset.status;
+        const allT = await loadAllTasks();
+        const task = allT.find(x=>x.id===draggedId);
+        if(task && task.status!==newStatus){
+          task.status = newStatus;
+          await saveTask(task);
+          draw(); refreshNotifBell();
+        }
+        draggedId = null;
+      });
+    });
+  }
 }
 
 /* ============================= ADMIN: DASHBOARD ============================= */
@@ -3218,6 +3680,11 @@ async function renderMyTimesheet(main){
         </div>
         <div class="field"><label>${t('hoursCount')}</label><input type="number" id="e-hours" min="0.5" step="0.5" value="8"/></div>
       </div>
+      <div class="field" id="e-linked-task-wrap" style="display:none;">
+        <label>${t('selectAssignedTaskLbl')}</label>
+        <select id="e-linked-task"><option value="">${t('noAssignedTaskOpt')}</option></select>
+        <div id="e-linked-task-hint" style="font-size:11.5px;color:var(--muted);margin-top:4px;"></div>
+      </div>
       <div class="field" id="e-task-wrap"><label>${t('task')}</label>
         <input type="text" id="e-task" placeholder="${t('taskPlaceholder')}"/>
       </div>
@@ -3249,13 +3716,38 @@ async function renderMyTimesheet(main){
     prjSel.innerHTML = list.map(p=>`<option value="${p.id}">${p.name}</option>`).join('') || `<option value="">${t('noPrjAvailable')}</option>`;
     if(list.some(p=>p.id===prev)) prjSel.value = prev;
   }
-  rebuildProjectOptions();
+  rebuildProjectOptions().then(()=>rebuildLinkedTaskOptions());
+  async function rebuildLinkedTaskOptions(){
+    const type = document.getElementById('e-type').value;
+    const wrap = document.getElementById('e-linked-task-wrap');
+    if(type!=='project'){ wrap.style.display='none'; return; }
+    const projectId = document.getElementById('e-prj').value;
+    const sel = document.getElementById('e-linked-task');
+    const hint = document.getElementById('e-linked-task-hint');
+    if(!projectId){ wrap.style.display='none'; sel.innerHTML = `<option value="">${t('noAssignedTaskOpt')}</option>`; return; }
+    const allTasks = await loadAllTasks();
+    const myTasks = allTasks.filter(x=>x.assigneeId===emp.id && x.projectId===projectId && x.month===monthSel.value);
+    if(!myTasks.length){ wrap.style.display='none'; sel.innerHTML = `<option value="">${t('noAssignedTaskOpt')}</option>`; return; }
+    wrap.style.display = '';
+    sel.innerHTML = `<option value="">${t('noAssignedTaskOpt')}</option>` + myTasks.map(x=>`<option value="${x.id}">${x.title} (${x.hoursAllocated||0}h)</option>`).join('');
+    hint.textContent = '';
+    sel.onchange = async ()=>{
+      const taskId = sel.value;
+      if(!taskId){ hint.textContent=''; return; }
+      const task = myTasks.find(x=>x.id===taskId);
+      document.getElementById('e-task').value = task.title;
+      const logged = await loggedHoursForTask(task);
+      hint.textContent = `${t('linkedTaskProgressLbl')}: ${fmt(logged)} ${t('ofLbl')} ${task.hoursAllocated||0}h`;
+    };
+  }
+  document.getElementById('e-prj').addEventListener('change', rebuildLinkedTaskOptions);
   document.getElementById('e-type').onchange = (e)=>{
     document.getElementById('e-prj-wrap').style.display = e.target.value==='project' ? '' : 'none';
     document.getElementById('e-task-wrap').style.display = e.target.value==='free' ? 'none' : '';
+    rebuildLinkedTaskOptions();
   };
   document.getElementById('e-task-wrap').style.display = document.getElementById('e-type').value==='free' ? 'none' : '';
-  monthSel.onchange = ()=>{ rebuildProjectOptions(); draw(); };
+  monthSel.onchange = ()=>{ rebuildProjectOptions(); rebuildLinkedTaskOptions(); draw(); };
   document.getElementById('e-add').onclick = addEntry;
   document.getElementById('e-date').onchange = updateDateHint;
   draw();
@@ -3308,7 +3800,8 @@ async function renderMyTimesheet(main){
       if(!allowed.some(p=>p.id===projectId)){ alert(t('projectNotAllowed')); return; }
     }
     const entries = await loadTimesheet(emp.id, monthSel.value);
-    entries.push({id:uid('e'), date, type, projectId, task, hours, location:loc, approved:false, approvedBy:null, approvedAt:null});
+    const linkedTaskId = (type==='project' && document.getElementById('e-linked-task')) ? (document.getElementById('e-linked-task').value || null) : null;
+    entries.push({id:uid('e'), date, type, projectId, task, hours, location:loc, approved:false, approvedBy:null, approvedAt:null, taskId:linkedTaskId});
     await saveTimesheet(emp.id, monthSel.value, entries);
     const days = await loadAttendance(emp.id, monthSel.value);
     const rec = emp.status==='active_fulltime' ? days.find(d=>d.date===date) : null;
