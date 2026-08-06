@@ -130,8 +130,11 @@
   .lang-btn .flag{font-size:16px;line-height:1;}
   .lang-btn.active{border-color:var(--cyan);color:var(--cyan);background:rgba(47,127,212,.08);}
   .lang-switch-top{display:flex;gap:4px;align-items:center;}
-  .lang-btn-sm{padding:4px 8px;border-radius:16px;border:1px solid var(--line);background:var(--panel2);font-size:15px;line-height:1;}
+  .lang-btn-sm{padding:4px 8px;border-radius:16px;border:1px solid var(--line);background:var(--panel2);font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;}
   .lang-btn-sm.active{border-color:var(--cyan);box-shadow:0 0 0 1px var(--cyan) inset;}
+  .flag-svg{display:inline-block;width:20px;height:14px;border-radius:2px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,.12);vertical-align:middle;}
+  .flag-svg svg{display:block;width:100%;height:100%;}
+  .lang-btn-sm .flag-svg{width:22px;height:16px;}
 
   /* ---- LTR (English) overrides ---- */
   html[dir="ltr"] .sidebar{border-left:none;border-right:1px solid var(--line);}
@@ -209,6 +212,8 @@ const COMPANY_NAME = "WENMORE Engineering Consultant";
   link.type = 'image/jpeg';
   link.href = LOGO_DATA_URI;
 })();
+const FLAG_EG = '<span class="flag-svg"><svg viewBox="0 0 30 20" xmlns="http://www.w3.org/2000/svg"><rect width="30" height="20" fill="#fff"/><rect width="30" height="6.67" fill="#CE1126"/><rect y="13.33" width="30" height="6.67" fill="#000"/></svg></span>';
+const FLAG_US = '<span class="flag-svg"><svg viewBox="0 0 30 20" xmlns="http://www.w3.org/2000/svg"><rect width="30" height="20" fill="#B22234"/><g fill="#fff"><rect y="1.54" width="30" height="1.54"/><rect y="4.62" width="30" height="1.54"/><rect y="7.69" width="30" height="1.54"/><rect y="10.77" width="30" height="1.54"/><rect y="13.85" width="30" height="1.54"/><rect y="16.92" width="30" height="1.54"/></g><rect width="12" height="10.77" fill="#3C3B6E"/></svg></span>';
 const DEPARTMENTS = [
   {id:'HYD', name_ar:'الهيدروليكا', name_en:'Hydraulic', color:'#2F7FD4'},
   {id:'RD',  name_ar:'الطرق', name_en:'Roads', color:'#6FCF97'},
@@ -952,8 +957,8 @@ function renderLogin(app){
     <div class="login-wrap">
       <div class="login-card">
         <div class="lang-switch">
-          <button class="lang-btn ${state.lang==='ar'?'active':''}" id="lang-ar"><span class="flag">🇪🇬</span> العربية</button>
-          <button class="lang-btn ${state.lang==='en'?'active':''}" id="lang-en"><span class="flag">🇺🇸</span> English</button>
+          <button class="lang-btn ${state.lang==='ar'?'active':''}" id="lang-ar">${FLAG_EG} العربية</button>
+          <button class="lang-btn ${state.lang==='en'?'active':''}" id="lang-en">${FLAG_US} English</button>
         </div>
         <div class="logo-wrap"><img src="${LOGO_DATA_URI}" alt="${COMPANY_NAME}"/></div>
         <div class="brand-eyebrow">${t('appEyebrow')}</div>
@@ -1073,8 +1078,8 @@ function renderShell(app){
       </div>
       <div class="topbar-right">
         <div class="lang-switch-top">
-          <button class="lang-btn-sm ${state.lang==='ar'?'active':''}" id="lang-ar-top" title="العربية">🇪🇬</button>
-          <button class="lang-btn-sm ${state.lang==='en'?'active':''}" id="lang-en-top" title="English">🇺🇸</button>
+          <button class="lang-btn-sm ${state.lang==='ar'?'active':''}" id="lang-ar-top" title="العربية">${FLAG_EG}</button>
+          <button class="lang-btn-sm ${state.lang==='en'?'active':''}" id="lang-en-top" title="English">${FLAG_US}</button>
         </div>
         <span>${state.currentUser.name}</span>
         ${state.currentUser.department ? `<span class="badge" style="background:${deptOf(state.currentUser.department).color}22;color:${deptOf(state.currentUser.department).color};border:1px solid ${deptOf(state.currentUser.department).color}55">${state.currentUser.department}</span>` : ''}
