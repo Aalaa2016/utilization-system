@@ -292,6 +292,7 @@ const DEPARTMENTS = [
   {id:'AM',  name_ar:'إدارة الأصول', name_en:'Asset Mgmt', color:'#E8D08F'},
   {id:'EXP', name_ar:'الخبراء', name_en:'Expert', color:'#C4E88F'},
   {id:'GIS', name_ar:'نظم المعلومات الجغرافية', name_en:'GIS', color:'#8FDDE8'},
+  {id:'BOARD', name_ar:'البورد', name_en:'Board', color:'#5B6B8C'},
 ];
 const MONTHS = [
   ['2026-02','فبراير 2026','February 2026'],['2026-03','مارس 2026','March 2026'],['2026-04','أبريل 2026','April 2026'],
@@ -1879,7 +1880,13 @@ async function renderProjectAccessPage(main){
   function rebuildEmpOptions(){
     const prev = empSel.value;
     const list = scopeEmployees.filter(e=> (showResignedChk && showResignedChk.checked) || !e.resignDate)
-      .slice().sort((a,b)=> (a.name||'').localeCompare(b.name||''));
+      .slice().sort((a,b)=>{
+        const ca = a.code || '', cb = b.code || '';
+        if(!ca && !cb) return (a.name||'').localeCompare(b.name||'');
+        if(!ca) return 1;
+        if(!cb) return -1;
+        return ca.localeCompare(cb, undefined, {numeric:true, sensitivity:'base'});
+      });
     empSel.innerHTML = list.map(e=>`<option value="${e.id}">${e.code?e.code+' — ':''}${e.name} (${deptName(e.department)})</option>`).join('');
     if(list.some(e=>e.id===prev)) empSel.value = prev;
   }
