@@ -177,6 +177,15 @@
   .chat-input-row input{flex:1;border:1px solid var(--line);border-radius:16px;padding:7px 12px;font-size:12.5px;}
   .chat-input-row button{background:var(--cyan);color:#fff;border:none;border-radius:50%;width:32px;height:32px;flex-shrink:0;cursor:pointer;}
   .chat-viewonly-note{padding:6px 10px;font-size:11px;color:var(--muted);text-align:center;background:var(--panel2);flex-shrink:0;}
+
+  /* ---- Shared employee avatar (photo or initial) + online status dot ---- */
+  .avatar-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:var(--cyan);color:#fff;font-weight:700;flex-shrink:0;overflow:visible;vertical-align:middle;}
+  .avatar-dot{position:absolute;bottom:-1px;inset-inline-end:-1px;width:32%;height:32%;min-width:9px;min-height:9px;border-radius:50%;border:2px solid var(--panel);}
+  .avatar-dot.online{background:#2FA36B;}
+  .avatar-dot.offline{background:#B9C3CE;}
+  .topbar-avatar-name{display:inline-flex;align-items:center;gap:7px;}
+  .emp-photo-upload{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+  .emp-photo-upload .avatar-wrap{width:56px;height:56px;font-size:22px;}
   .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--cyan);color:var(--text);padding:10px 20px;border-radius:4px;font-size:13px;z-index:100;}
   ::-webkit-scrollbar{width:8px;height:8px;}
   ::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
@@ -594,6 +603,7 @@ const I18N = {
     chatNoConversations:'مفيش محادثات لسه', chatTypeMsgPh:'اكتب رسالة...',
     chatNoMessagesYet:'ابدأ المحادثة بإرسال أول رسالة', chatViewOnlyNote:'👁 وضع المشاهدة (مدير عام/أدمن) — مش هتقدر تبعت',
     chatSelectConversation:'اختر محادثة عشان تشوفها',
+    uploadPhotoBtn:'رفع صورة', removePhotoBtn:'حذف الصورة', onlineNowLbl:'متصل الآن',
   },
   en: {
     appTitle:'WENPRO',
@@ -779,6 +789,7 @@ const I18N = {
     chatNoConversations:'No conversations yet', chatTypeMsgPh:'Type a message...',
     chatNoMessagesYet:'Start the conversation by sending the first message', chatViewOnlyNote:'👁 View-only mode (GM/Admin) — you cannot send',
     chatSelectConversation:'Select a conversation to view it',
+    uploadPhotoBtn:'Upload Photo', removePhotoBtn:'Remove Photo', onlineNowLbl:'Online now',
   }
 };
 function t(key){ return (I18N[state.lang] && I18N[state.lang][key]) || key; }
@@ -1065,6 +1076,62 @@ function toggleNotifPanel(){
 }
 
 async function loadAttendance(empId, month){ return await loadJSON(attKey(empId,month), true, []); }
+
+/* ============================= PRESENCE (online status, Facebook-style green dot) ============================= */
+const ONLINE_THRESHOLD_MS = 70000; // considered "online" if a heartbeat was seen in the last 70s
+function presenceKey(userId){ return `presence:${userId}`; }
+async function updateMyPresence(){
+  if(!state.currentUser) return;
+  try{ await saveJSON(presenceKey(state.currentUser.id), true, {lastActiveAt:new Date().toISOString()}); }catch(e){/* non-critical */}
+}
+async function loadPresenceMap(userIds){
+  const uniqueIds = [...new Set(userIds)];
+  const results = await Promise.all(uniqueIds.map(id=>loadJSON(presenceKey(id), true, null)));
+  const map = {};
+  uniqueIds.forEach((id,idx)=>{ map[id]=results[idx]; });
+  return map;
+}
+function isOnline(presenceRecord){
+  if(!presenceRecord || !presenceRecord.lastActiveAt) return false;
+  return (Date.now() - new Date(presenceRecord.lastActiveAt).getTime()) < ONLINE_THRESHOLD_MS;
+}
+
+/* ============================= EMPLOYEE PHOTO / AVATAR (shared everywhere) ============================= */
+// Renders a small circular avatar: the employee's uploaded photo if present, otherwise their initial.
+// size: pixel diameter. showDot: if true, adds a green/gray online-status dot (needs online boolean).
+function empAvatarHTML(emp, size, online){
+  size = size || 28;
+  const initial = (emp && emp.name ? emp.name.trim().charAt(0) : '?');
+  const inner = (emp && emp.photo)
+    ? `<img src="${emp.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`
+    : initial;
+  const dotHTML = (online!==undefined) ? `<span class="avatar-dot ${online?'online':'offline'}"></span>` : '';
+  return `<span class="avatar-wrap" style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.42)}px;">${inner}${dotHTML}</span>`;
+}
+// Resizes/compresses an uploaded image client-side to a small square JPEG data URI (keeps it well within storage limits).
+function resizeImageFileToDataURL(file, maxSize){
+  maxSize = maxSize || 160;
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = ()=>{
+        const canvas = document.createElement('canvas');
+        canvas.width = maxSize; canvas.height = maxSize;
+        const ctx = canvas.getContext('2d');
+        // cover-crop to a square so the avatar isn't stretched
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width-side)/2, sy = (img.height-side)/2;
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, maxSize, maxSize);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 async function saveAttendance(empId, month, days){ await saveJSON(attKey(empId,month), true, days); }
 function attendanceHoursDiff(inStr, outStr){
   if(!inStr || !outStr) return 0;
@@ -1381,7 +1448,7 @@ function renderShell(app){
         <div class="notif-bell-wrap" id="notif-bell-wrap">
           <button class="notif-bell-btn" id="notif-bell-btn" title="${t('notifBellTitle')}">🔔</button>
         </div>
-        <span>${state.currentUser.name}</span>
+        <span class="topbar-avatar-name">${empAvatarHTML(state.currentUser, 26)} ${state.currentUser.name}</span>
         ${state.currentUser.department ? `<span class="badge" style="background:${deptOf(state.currentUser.department).color}22;color:${deptOf(state.currentUser.department).color};border:1px solid ${deptOf(state.currentUser.department).color}55">${state.currentUser.department}</span>` : ''}
         ${state.currentUser.role ? `<span class="badge" style="background:var(--panel2);color:var(--navy);border:1px solid var(--line)">${roleLabel(state.currentUser.role)}</span>` : ''}
         <button class="btn btn-sm" id="change-pass-btn">${t('changePassword')}</button>
@@ -1472,7 +1539,7 @@ function renderEmployeesPage(main){
       ${list.map(e=>`
         <tr>
           <td class="mono">${e.code||'—'}</td>
-          <td>${e.name}</td>
+          <td><span style="display:flex;align-items:center;gap:8px;">${empAvatarHTML(e, 26)}${e.name}</span></td>
           <td class="mono">${e.username}</td>
           <td><span class="badge" style="background:${deptOf(e.department).color}22;color:${deptOf(e.department).color}">${deptName(e.department)}</span></td>
           <td>${roleLabel(e.role)}</td>
@@ -1506,12 +1573,21 @@ function renderEmployeesPage(main){
 
 function openEmployeeModal(emp){
   const isNew = !emp;
-  emp = emp || {id:uid('emp'), code:'', name:'', username:'', password:'', department:DEPARTMENTS[0].id, status:'active_fulltime', targetHours:198, rate:0, role:'engineer', managerId:null, hireDate:'', resignDate:''};
+  emp = emp || {id:uid('emp'), code:'', name:'', username:'', password:'', department:DEPARTMENTS[0].id, status:'active_fulltime', targetHours:198, rate:0, role:'engineer', managerId:null, hireDate:'', resignDate:'', photo:''};
+  let pendingPhoto = emp.photo || '';
   const backdrop = document.createElement('div');
   backdrop.className='modal-backdrop';
   backdrop.innerHTML = `
     <div class="modal">
       <h3>${isNew?t('addEmpTitle'):t('editEmpTitle')}</h3>
+      <div class="emp-photo-upload">
+        <span id="m-photo-preview">${empAvatarHTML(emp, 56)}</span>
+        <div>
+          <input type="file" id="m-photo-file" accept="image/*" style="display:none;"/>
+          <button type="button" class="btn btn-sm" id="m-photo-pick">${t('uploadPhotoBtn')}</button>
+          <button type="button" class="btn btn-sm" id="m-photo-remove" style="border-color:var(--rose);color:var(--rose);${emp.photo?'':'display:none;'}">${t('removePhotoBtn')}</button>
+        </div>
+      </div>
       <div class="row2">
         <div class="field"><label>${t('empCode')}</label><input id="m-code" value="${emp.code||''}" placeholder="EMP-00X"/></div>
         <div class="field"><label>${t('fullName')}</label><input id="m-name" value="${emp.name}"/></div>
@@ -1562,6 +1638,19 @@ function openEmployeeModal(emp){
   if(!Array.isArray(emp.rateHistory)) emp.rateHistory=[];
   document.body.appendChild(backdrop);
   document.getElementById('m-cancel').onclick = ()=>backdrop.remove();
+  document.getElementById('m-photo-pick').onclick = ()=>document.getElementById('m-photo-file').click();
+  document.getElementById('m-photo-file').onchange = async (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    pendingPhoto = await resizeImageFileToDataURL(file, 160);
+    document.getElementById('m-photo-preview').innerHTML = empAvatarHTML({...emp, photo:pendingPhoto}, 56);
+    document.getElementById('m-photo-remove').style.display = '';
+  };
+  document.getElementById('m-photo-remove').onclick = ()=>{
+    pendingPhoto = '';
+    document.getElementById('m-photo-preview').innerHTML = empAvatarHTML({...emp, photo:''}, 56);
+    document.getElementById('m-photo-remove').style.display = 'none';
+  };
   document.getElementById('m-status').onchange = (e)=>{
     if(e.target.value==='active_fulltime') document.getElementById('m-target').value = 198;
   };
@@ -1599,6 +1688,7 @@ function openEmployeeModal(emp){
       managerId: document.getElementById('m-manager').value || null,
       hireDate: document.getElementById('m-hiredate').value || null,
       resignDate: document.getElementById('m-resigndate').value || null,
+      photo: pendingPhoto || '',
     };
     const idx = state.employees.findIndex(x=>x.id===emp.id);
     if(idx>=0) state.employees[idx]=updated; else state.employees.push(updated);
@@ -1978,7 +2068,7 @@ async function renderTasksBoardPage(main){
           <div class="kanban-card-meta">
             <span class="badge" style="background:var(--cyan)22;color:var(--cyan);">${prj?prj.name:'—'}</span>
             <span class="badge" style="background:${pr.color}22;color:${pr.color};">${taskPriorityLabel(task.priority)}</span>
-            <span>${assignee?assignee.name:'—'}</span>
+            <span style="display:inline-flex;align-items:center;gap:4px;">${assignee?empAvatarHTML(assignee,18):''}${assignee?assignee.name:'—'}</span>
             <span class="mono">${task.hoursAllocated||0}h · ${monthLabel(task.month)}</span>
             ${task.dueDate ? `<span class="mono">📅 ${task.dueDate}</span>` : ''}
             ${riskBadgeHTML(risk)}
@@ -2377,7 +2467,7 @@ async function renderAdminDashboard(main){
         const pctCell = (v)=>`<td class="mono grp-util" style="background:${utilColor(v)}22;color:${utilColor(v)}">${fmt(v)}%</td>`;
         return `<tr${counts?'':' style="opacity:.6;"'}>
           <td class="mono">${emp.code||'—'}</td>
-          <td>${emp.name}${resignedBadge(emp, month)}</td>
+          <td><span style="display:flex;align-items:center;gap:8px;">${empAvatarHTML(emp, 24)}${emp.name}${resignedBadge(emp, month)}</span></td>
           <td><span class="badge" style="background:${deptOf(emp.department).color}22;color:${deptOf(emp.department).color}">${deptName(emp.department)}</span></td>
           <td class="mono">${fmt(target)}</td>
           <td class="mono grp-approved">${fmt(s.onsite)}</td>
@@ -3315,7 +3405,7 @@ async function renderMonthlyDataPage(main){
         const appr = apprMap[emp.id] || {status:'pending'};
         return `<tr data-emp="${emp.id}"${counts?'':' style="opacity:.6;"'}>
           <td class="mono">${emp.code||'—'}</td>
-          <td>${emp.name}${resignedBadge(emp, month)}</td>
+          <td><span style="display:flex;align-items:center;gap:8px;">${empAvatarHTML(emp, 24)}${emp.name}${resignedBadge(emp, month)}</span></td>
           <td><span class="badge" style="background:${deptOf(emp.department).color}22;color:${deptOf(emp.department).color}">${deptName(emp.department)}</span></td>
           <td><input data-target type="number" value="${target}" style="width:70px;"/></td>
           <td><input data-approved data-code="${emp.code||''}" type="number" value="${approved}" style="width:70px;"/></td>
@@ -3391,7 +3481,7 @@ async function renderTeamApprovalPage(main){
         const appr = apprMap[emp.id] || {status:'pending'};
         return `<tr data-emp="${emp.id}"${counts?'':' style="opacity:.6;"'}>
           <td class="mono">${emp.code||'—'}</td>
-          <td>${emp.name}${resignedBadge(emp, month)}</td>
+          <td><span style="display:flex;align-items:center;gap:8px;">${empAvatarHTML(emp, 24)}${emp.name}${resignedBadge(emp, month)}</span></td>
           <td><span class="badge" style="background:${deptOf(emp.department).color}22;color:${deptOf(emp.department).color}">${deptName(emp.department)}</span></td>
           <td class="mono">${fmt(target)}</td>
           <td class="mono">${fmt(approved)}</td>
@@ -3568,7 +3658,7 @@ async function renderGmApprovalsPage(main){
         const canRevoke = appr.status==='gm_approved';
         return `<tr data-emp="${emp.id}"${counts?'':' style="opacity:.6;"'}>
           <td class="mono">${emp.code||'—'}</td>
-          <td>${emp.name}${resignedBadge(emp, month)}</td>
+          <td><span style="display:flex;align-items:center;gap:8px;">${empAvatarHTML(emp, 24)}${emp.name}${resignedBadge(emp, month)}</span></td>
           <td><span class="badge" style="background:${deptOf(emp.department).color}22;color:${deptOf(emp.department).color}">${deptName(emp.department)}</span></td>
           <td>${managerName(emp)}</td>
           <td class="mono">${fmt(target)}</td>
@@ -4000,9 +4090,13 @@ async function renderMyDashboard(main){
 /* ============================= CHAT WIDGET (floating, bottom-right, persistent) ============================= */
 let _chatPollTimer = null;
 let _chatBadgeTimer = null;
+let _presenceTimer = null;
 let _chatState = {open:false, mode:'contacts', activePartnerId:null, adminViewingKey:null};
 
 function ensureChatWidget(){
+  updateMyPresence();
+  if(_presenceTimer) clearInterval(_presenceTimer);
+  _presenceTimer = setInterval(updateMyPresence, 25000);
   if(document.getElementById('chat-widget-root')) { refreshChatBadge(); return; }
   const root = document.createElement('div');
   root.id = 'chat-widget-root';
@@ -4021,6 +4115,7 @@ function removeChatWidget(){
   if(root) root.remove();
   if(_chatPollTimer){ clearInterval(_chatPollTimer); _chatPollTimer=null; }
   if(_chatBadgeTimer){ clearInterval(_chatBadgeTimer); _chatBadgeTimer=null; }
+  if(_presenceTimer){ clearInterval(_presenceTimer); _presenceTimer=null; }
   _chatState = {open:false, mode:'contacts', activePartnerId:null, adminViewingKey:null};
 }
 async function refreshChatBadge(){
@@ -4039,7 +4134,11 @@ function toggleChatPanel(){
     _chatState.mode = 'contacts'; _chatState.activePartnerId = null; _chatState.adminViewingKey = null;
     drawChatPanel();
     if(_chatPollTimer) clearInterval(_chatPollTimer);
-    _chatPollTimer = setInterval(()=>{ if(_chatState.open) drawChatPanel(true); }, 4000);
+    _chatPollTimer = setInterval(()=>{
+      if(!_chatState.open) return;
+      if(_chatState.mode==='contacts') refreshContactPresenceDots();
+      else drawChatPanel(true);
+    }, 4000);
   } else if(_chatPollTimer){ clearInterval(_chatPollTimer); _chatPollTimer=null; }
 }
 async function drawChatPanel(silentRefresh){
@@ -4049,7 +4148,7 @@ async function drawChatPanel(silentRefresh){
   const hasFullAccess = user.role==='admin' || user.role==='gm';
 
   if(_chatState.mode==='thread' && _chatState.activePartnerId){
-    if(!silentRefresh) renderChatThreadShell(panel, hasFullAccess);
+    if(!silentRefresh) await renderChatThreadShell(panel, hasFullAccess);
     await refreshChatThreadMessages();
     return;
   }
@@ -4077,12 +4176,45 @@ function wireChatTabs(hasFullAccess){
   if(t2) t2.onclick = ()=>{ _chatState.mode='admin-list'; drawChatPanel(); };
 }
 
+// Who a given user is allowed to see/chat with in the contacts list:
+// - manager / gm / admin: everyone in the company
+// - full-time employees: other full-time employees only (their manager is naturally included, since managers are full-time)
+// - part-time employees: their direct manager only
+function getChatVisibleColleagues(user){
+  const others = state.employees.filter(e=>e.id!==user.id && !e.resignDate);
+  const canSeeEveryone = user.role==='manager' || user.role==='gm' || user.role==='admin';
+  if(canSeeEveryone) return others;
+  if(user.status==='active_parttime'){
+    return others.filter(e=>e.id===user.managerId);
+  }
+  return others.filter(e=>e.status==='active_fulltime');
+}
+
+async function refreshContactPresenceDots(){
+  const listEl = document.getElementById('chat-contact-list');
+  if(!listEl) return;
+  const ids = [...listEl.querySelectorAll('.chat-contact')].map(el=>el.dataset.id);
+  if(!ids.length) return;
+  const presenceMap = await loadPresenceMap(ids);
+  ids.forEach(id=>{
+    const row = listEl.querySelector(`.chat-contact[data-id="${id}"]`);
+    if(!row) return;
+    const avatar = row.querySelector('.avatar-wrap');
+    if(!avatar) return;
+    let dot = avatar.querySelector('.avatar-dot');
+    const online = isOnline(presenceMap[id]);
+    if(!dot){ dot = document.createElement('span'); dot.className='avatar-dot'; avatar.appendChild(dot); }
+    dot.className = 'avatar-dot ' + (online ? 'online' : 'offline');
+  });
+}
+
 async function renderChatContactList(panel, hasFullAccess){
   const user = state.currentUser;
   const idx = await loadChatIndex(user.id);
-  const colleagues = state.employees.filter(e=>e.id!==user.id && !e.resignDate);
+  const colleagues = getChatVisibleColleagues(user);
+  const presenceMap = await loadPresenceMap(colleagues.map(e=>e.id));
   const rows = colleagues.map(e=>({
-    id:e.id, name:e.name,
+    id:e.id, name:e.name, photo:e.photo, online:isOnline(presenceMap[e.id]),
     lastMessage: idx[e.id] ? idx[e.id].lastMessage : '',
     lastMessageAt: idx[e.id] ? idx[e.id].lastMessageAt : null,
     unread: idx[e.id] ? (idx[e.id].unread||0) : 0,
@@ -4107,7 +4239,7 @@ async function renderChatContactList(panel, hasFullAccess){
     const filtered = !filterText ? rows : rows.filter(r=>r.name.toLowerCase().includes(filterText.toLowerCase()));
     listEl.innerHTML = filtered.map(r=>`
       <div class="chat-contact" data-id="${r.id}">
-        <div class="chat-avatar">${(r.name||'?').trim().charAt(0)}</div>
+        ${empAvatarHTML(r, 34, r.online)}
         <div class="chat-contact-info">
           <div class="chat-contact-name">${r.name}</div>
           <div class="chat-contact-preview">${r.lastMessage || ''}</div>
@@ -4122,11 +4254,14 @@ async function renderChatContactList(panel, hasFullAccess){
   document.getElementById('chat-search-input').oninput = (e)=>drawRows(e.target.value);
 }
 
-function renderChatThreadShell(panel, hasFullAccess){
+async function renderChatThreadShell(panel, hasFullAccess){
   const partner = state.employees.find(e=>e.id===_chatState.activePartnerId);
+  const presenceMap = partner ? await loadPresenceMap([partner.id]) : {};
+  const online = partner ? isOnline(presenceMap[partner.id]) : false;
   panel.innerHTML = `
     <div class="chat-header">
       <button id="chat-back">←</button>
+      ${partner ? empAvatarHTML(partner, 26, online) : ''}
       <span class="chat-header-title">${partner ? partner.name : ''}</span>
       <button id="chat-close">✕</button>
     </div>
