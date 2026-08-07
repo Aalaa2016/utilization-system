@@ -143,6 +143,40 @@
   .notif-item{padding:8px 10px;border-radius:4px;font-size:12px;border-bottom:1px solid var(--line-soft);}
   .notif-item:last-child{border-bottom:none;}
   .notif-item-title{font-weight:600;margin-bottom:3px;}
+
+  /* ---- Chat widget (bottom-right floating, persistent) ---- */
+  #chat-widget-root{position:fixed;bottom:18px;right:18px;z-index:80;font-family:inherit;}
+  .chat-fab{position:relative;width:52px;height:52px;border-radius:50%;background:var(--cyan);color:#fff;border:none;font-size:22px;box-shadow:0 4px 14px rgba(18,35,71,.25);cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .chat-fab-badge{position:absolute;top:-4px;right:-4px;background:var(--rose);color:#fff;font-size:11px;font-weight:700;border-radius:10px;min-width:18px;height:18px;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--bg);}
+  .chat-panel{position:fixed;bottom:80px;right:18px;width:330px;height:460px;max-height:70vh;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 34px rgba(18,35,71,.22);display:flex;flex-direction:column;overflow:hidden;direction:ltr;}
+  .chat-panel[dir-ar]{direction:rtl;}
+  .chat-header{background:var(--navy);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:8px;flex-shrink:0;}
+  .chat-header-title{font-size:13.5px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .chat-header button{background:transparent;border:none;color:#fff;cursor:pointer;font-size:15px;padding:2px 4px;}
+  .chat-tabs{display:flex;border-bottom:1px solid var(--line);flex-shrink:0;}
+  .chat-tab{flex:1;text-align:center;padding:8px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;}
+  .chat-tab.active{color:var(--cyan);border-bottom-color:var(--cyan);}
+  .chat-search{padding:8px 10px;flex-shrink:0;}
+  .chat-search input{width:100%;border:1px solid var(--line);border-radius:16px;padding:6px 12px;font-size:12.5px;background:var(--panel2);}
+  .chat-contact-list{flex:1;overflow-y:auto;}
+  .chat-contact{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--line-soft);}
+  .chat-contact:hover{background:var(--panel2);}
+  .chat-avatar{width:34px;height:34px;border-radius:50%;background:var(--cyan);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .chat-contact-info{flex:1;overflow:hidden;}
+  .chat-contact-name{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .chat-contact-preview{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .chat-contact-unread{background:var(--rose);color:#fff;font-size:10px;font-weight:700;border-radius:9px;min-width:17px;height:17px;display:flex;align-items:center;justify-content:center;padding:0 4px;flex-shrink:0;}
+  .chat-thread{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:6px;}
+  .chat-bubble-row{display:flex;}
+  .chat-bubble-row.mine{justify-content:flex-end;}
+  .chat-bubble{max-width:75%;padding:7px 11px;border-radius:14px;font-size:12.5px;line-height:1.5;word-break:break-word;}
+  .chat-bubble-row.mine .chat-bubble{background:var(--cyan);color:#fff;border-bottom-right-radius:3px;}
+  .chat-bubble-row:not(.mine) .chat-bubble{background:var(--panel2);color:var(--ink);border-bottom-left-radius:3px;}
+  .chat-bubble-time{font-size:9.5px;opacity:.7;margin-top:3px;display:block;}
+  .chat-input-row{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--line);flex-shrink:0;}
+  .chat-input-row input{flex:1;border:1px solid var(--line);border-radius:16px;padding:7px 12px;font-size:12.5px;}
+  .chat-input-row button{background:var(--cyan);color:#fff;border:none;border-radius:50%;width:32px;height:32px;flex-shrink:0;cursor:pointer;}
+  .chat-viewonly-note{padding:6px 10px;font-size:11px;color:var(--muted);text-align:center;background:var(--panel2);flex-shrink:0;}
   .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--cyan);color:var(--text);padding:10px 20px;border-radius:4px;font-size:13px;z-index:100;}
   ::-webkit-scrollbar{width:8px;height:8px;}
   ::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
@@ -554,6 +588,12 @@ const I18N = {
     alertPrjOverdue:'مشروع متأخر عن التسليم', alertPrjDue:'مشروع قريب من التسليم',
     selectAssignedTaskLbl:'اختر من المهام المسندة (اختياري)', noAssignedTaskOpt:'— بدون اختيار —',
     linkedTaskProgressLbl:'الساعات المسجلة على المهمة دي',
+
+    chatTitle:'الشات', chatMyChatsTab:'محادثاتي', chatAllChatsTab:'كل المحادثات',
+    chatSearchPh:'دور على زميل...', chatNoContacts:'مفيش زملاء متاحين',
+    chatNoConversations:'مفيش محادثات لسه', chatTypeMsgPh:'اكتب رسالة...',
+    chatNoMessagesYet:'ابدأ المحادثة بإرسال أول رسالة', chatViewOnlyNote:'👁 وضع المشاهدة (مدير عام/أدمن) — مش هتقدر تبعت',
+    chatSelectConversation:'اختر محادثة عشان تشوفها',
   },
   en: {
     appTitle:'WENPRO',
@@ -733,6 +773,12 @@ const I18N = {
     alertPrjOverdue:'Project overdue', alertPrjDue:'Project deadline approaching',
     selectAssignedTaskLbl:'Select from assigned tasks (optional)', noAssignedTaskOpt:'— No selection —',
     linkedTaskProgressLbl:'Hours logged against this task',
+
+    chatTitle:'Chat', chatMyChatsTab:'My Chats', chatAllChatsTab:'All Conversations',
+    chatSearchPh:'Search colleague...', chatNoContacts:'No colleagues available',
+    chatNoConversations:'No conversations yet', chatTypeMsgPh:'Type a message...',
+    chatNoMessagesYet:'Start the conversation by sending the first message', chatViewOnlyNote:'👁 View-only mode (GM/Admin) — you cannot send',
+    chatSelectConversation:'Select a conversation to view it',
   }
 };
 function t(key){ return (I18N[state.lang] && I18N[state.lang][key]) || key; }
@@ -874,6 +920,45 @@ function visibleProjectsFor(access){
   if(!access || !access.length) return activeProjects;
   return activeProjects.filter(p=>access.includes(p.id));
 }
+/* ============================= CHAT (persistent, never deleted) ============================= */
+function chatConvId(a, b){ return [a,b].sort().join('__'); }
+function chatKey(a, b){ return `chat:${chatConvId(a,b)}`; }
+function chatIndexKey(userId){ return `chat-index:${userId}`; }
+async function loadChatThread(a, b){ return await loadJSON(chatKey(a,b), true, []); }
+async function loadChatIndex(userId){ return await loadJSON(chatIndexKey(userId), true, {}); }
+async function saveChatIndex(userId, idx){ await saveJSON(chatIndexKey(userId), true, idx); }
+
+async function sendChatMessageTo(fromId, fromName, toId, toName, text){
+  const key = chatKey(fromId, toId);
+  const messages = await loadJSON(key, true, []);
+  messages.push({id:uid('msg'), senderId:fromId, senderName:fromName, text, at:new Date().toISOString()});
+  await saveJSON(key, true, messages); // messages are never removed from this array — permanent history
+  const [fromIdx, toIdx] = await Promise.all([loadChatIndex(fromId), loadChatIndex(toId)]);
+  fromIdx[toId] = {partnerId:toId, partnerName:toName, lastMessage:text.slice(0,80), lastMessageAt:new Date().toISOString(), unread:0};
+  const prevUnread = (toIdx[fromId] && toIdx[fromId].unread) || 0;
+  toIdx[fromId] = {partnerId:fromId, partnerName:fromName, lastMessage:text.slice(0,80), lastMessageAt:new Date().toISOString(), unread:prevUnread+1};
+  await Promise.all([saveChatIndex(fromId, fromIdx), saveChatIndex(toId, toIdx)]);
+  return messages;
+}
+async function markChatThreadRead(ownerId, partnerId){
+  const idx = await loadChatIndex(ownerId);
+  if(idx[partnerId] && idx[partnerId].unread){ idx[partnerId].unread = 0; await saveChatIndex(ownerId, idx); }
+}
+async function totalUnreadChatCount(userId){
+  const idx = await loadChatIndex(userId);
+  return Object.values(idx).reduce((sum,e)=>sum+(e.unread||0), 0);
+}
+// Admin/GM oversight: every conversation that has ever existed, company-wide, read-only.
+async function loadAllChatConversations(){
+  const keys = await listKeys('chat:', true);
+  const threads = await Promise.all(keys.map(k => loadJSON(k, true, [])));
+  return keys.map((k, idx) => {
+    const ids = k.slice('chat:'.length).split('__');
+    return {key:k, participantIds:ids, messages:threads[idx]};
+  }).filter(c => c.messages.length>0);
+}
+
+
 /* ============================= TASKS (Task Management — Trello-like) ============================= */
 function taskKey(id){ return `task:${id}`; }
 async function loadAllTasks(){
@@ -1155,8 +1240,9 @@ function toast(msg){
 function render(){
   const app = document.getElementById('app');
   if(!state.loaded){ app.innerHTML = `<div style="color:#7C93A8;padding:40px;text-align:center;">${t('loading')}</div>`; return; }
-  if(!state.currentUser){ renderLogin(app); return; }
+  if(!state.currentUser){ removeChatWidget(); renderLogin(app); return; }
   renderShell(app);
+  ensureChatWidget();
 }
 
 /* ============================= LOGIN ============================= */
@@ -3909,6 +3995,244 @@ async function renderMyDashboard(main){
       </div>
     `;
   }
+}
+
+/* ============================= CHAT WIDGET (floating, bottom-right, persistent) ============================= */
+let _chatPollTimer = null;
+let _chatBadgeTimer = null;
+let _chatState = {open:false, mode:'contacts', activePartnerId:null, adminViewingKey:null};
+
+function ensureChatWidget(){
+  if(document.getElementById('chat-widget-root')) { refreshChatBadge(); return; }
+  const root = document.createElement('div');
+  root.id = 'chat-widget-root';
+  root.innerHTML = `
+    <button class="chat-fab" id="chat-fab" title="${t('chatTitle')}">💬<span class="chat-fab-badge" id="chat-fab-badge" style="display:none;">0</span></button>
+    <div class="chat-panel" id="chat-panel" style="display:none;" ${state.lang==='ar'?'dir-ar':''}></div>
+  `;
+  document.body.appendChild(root);
+  document.getElementById('chat-fab').onclick = toggleChatPanel;
+  refreshChatBadge();
+  if(_chatBadgeTimer) clearInterval(_chatBadgeTimer);
+  _chatBadgeTimer = setInterval(refreshChatBadge, 20000); // keep the unread badge fresh even while panel is closed
+}
+function removeChatWidget(){
+  const root = document.getElementById('chat-widget-root');
+  if(root) root.remove();
+  if(_chatPollTimer){ clearInterval(_chatPollTimer); _chatPollTimer=null; }
+  if(_chatBadgeTimer){ clearInterval(_chatBadgeTimer); _chatBadgeTimer=null; }
+  _chatState = {open:false, mode:'contacts', activePartnerId:null, adminViewingKey:null};
+}
+async function refreshChatBadge(){
+  const badge = document.getElementById('chat-fab-badge');
+  if(!badge || !state.currentUser) return;
+  const count = await totalUnreadChatCount(state.currentUser.id);
+  if(count>0){ badge.style.display=''; badge.textContent = count>99?'99+':String(count); }
+  else{ badge.style.display='none'; }
+}
+function toggleChatPanel(){
+  const panel = document.getElementById('chat-panel');
+  _chatState.open = !_chatState.open;
+  panel.style.display = _chatState.open ? 'flex' : 'none';
+  panel.style.flexDirection = 'column';
+  if(_chatState.open){
+    _chatState.mode = 'contacts'; _chatState.activePartnerId = null; _chatState.adminViewingKey = null;
+    drawChatPanel();
+    if(_chatPollTimer) clearInterval(_chatPollTimer);
+    _chatPollTimer = setInterval(()=>{ if(_chatState.open) drawChatPanel(true); }, 4000);
+  } else if(_chatPollTimer){ clearInterval(_chatPollTimer); _chatPollTimer=null; }
+}
+async function drawChatPanel(silentRefresh){
+  const panel = document.getElementById('chat-panel');
+  if(!panel) return;
+  const user = state.currentUser;
+  const hasFullAccess = user.role==='admin' || user.role==='gm';
+
+  if(_chatState.mode==='thread' && _chatState.activePartnerId){
+    if(!silentRefresh) renderChatThreadShell(panel, hasFullAccess);
+    await refreshChatThreadMessages();
+    return;
+  }
+  if(_chatState.mode==='admin-thread' && _chatState.adminViewingKey){
+    if(!silentRefresh) await renderChatAdminThread(panel);
+    return;
+  }
+  if(silentRefresh) return; // contact/admin lists don't need silent polling refresh
+  if(_chatState.mode==='admin-list'){ await renderChatAdminList(panel, hasFullAccess); return; }
+  await renderChatContactList(panel, hasFullAccess);
+}
+
+function chatTabsHTML(hasFullAccess, activeMode){
+  if(!hasFullAccess) return '';
+  return `
+    <div class="chat-tabs">
+      <div class="chat-tab ${activeMode==='contacts'?'active':''}" id="chat-tab-mine">${t('chatMyChatsTab')}</div>
+      <div class="chat-tab ${activeMode==='admin-list'?'active':''}" id="chat-tab-all">${t('chatAllChatsTab')}</div>
+    </div>`;
+}
+function wireChatTabs(hasFullAccess){
+  if(!hasFullAccess) return;
+  const t1 = document.getElementById('chat-tab-mine'), t2 = document.getElementById('chat-tab-all');
+  if(t1) t1.onclick = ()=>{ _chatState.mode='contacts'; drawChatPanel(); };
+  if(t2) t2.onclick = ()=>{ _chatState.mode='admin-list'; drawChatPanel(); };
+}
+
+async function renderChatContactList(panel, hasFullAccess){
+  const user = state.currentUser;
+  const idx = await loadChatIndex(user.id);
+  const colleagues = state.employees.filter(e=>e.id!==user.id && !e.resignDate);
+  const rows = colleagues.map(e=>({
+    id:e.id, name:e.name,
+    lastMessage: idx[e.id] ? idx[e.id].lastMessage : '',
+    lastMessageAt: idx[e.id] ? idx[e.id].lastMessageAt : null,
+    unread: idx[e.id] ? (idx[e.id].unread||0) : 0,
+  })).sort((a,b)=>{
+    if(a.lastMessageAt && b.lastMessageAt) return b.lastMessageAt.localeCompare(a.lastMessageAt);
+    if(a.lastMessageAt) return -1;
+    if(b.lastMessageAt) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  panel.innerHTML = `
+    <div class="chat-header"><span class="chat-header-title">${t('chatTitle')}</span><button id="chat-close">✕</button></div>
+    ${chatTabsHTML(hasFullAccess, 'contacts')}
+    <div class="chat-search"><input type="text" id="chat-search-input" placeholder="${t('chatSearchPh')}"/></div>
+    <div class="chat-contact-list" id="chat-contact-list"></div>
+  `;
+  document.getElementById('chat-close').onclick = toggleChatPanel;
+  wireChatTabs(hasFullAccess);
+
+  function drawRows(filterText){
+    const listEl = document.getElementById('chat-contact-list');
+    const filtered = !filterText ? rows : rows.filter(r=>r.name.toLowerCase().includes(filterText.toLowerCase()));
+    listEl.innerHTML = filtered.map(r=>`
+      <div class="chat-contact" data-id="${r.id}">
+        <div class="chat-avatar">${(r.name||'?').trim().charAt(0)}</div>
+        <div class="chat-contact-info">
+          <div class="chat-contact-name">${r.name}</div>
+          <div class="chat-contact-preview">${r.lastMessage || ''}</div>
+        </div>
+        ${r.unread>0 ? `<div class="chat-contact-unread">${r.unread>9?'9+':r.unread}</div>` : ''}
+      </div>`).join('') || `<div class="empty-state" style="padding:20px;">${t('chatNoContacts')}</div>`;
+    listEl.querySelectorAll('.chat-contact').forEach(el=>{
+      el.onclick = ()=>{ _chatState.mode='thread'; _chatState.activePartnerId = el.dataset.id; drawChatPanel(); };
+    });
+  }
+  drawRows('');
+  document.getElementById('chat-search-input').oninput = (e)=>drawRows(e.target.value);
+}
+
+function renderChatThreadShell(panel, hasFullAccess){
+  const partner = state.employees.find(e=>e.id===_chatState.activePartnerId);
+  panel.innerHTML = `
+    <div class="chat-header">
+      <button id="chat-back">←</button>
+      <span class="chat-header-title">${partner ? partner.name : ''}</span>
+      <button id="chat-close">✕</button>
+    </div>
+    <div class="chat-thread" id="chat-thread-body"></div>
+    <div class="chat-input-row">
+      <input type="text" id="chat-msg-input" placeholder="${t('chatTypeMsgPh')}" autocomplete="off"/>
+      <button id="chat-send-btn">➤</button>
+    </div>
+  `;
+  document.getElementById('chat-close').onclick = toggleChatPanel;
+  document.getElementById('chat-back').onclick = ()=>{ _chatState.mode='contacts'; _chatState.activePartnerId=null; drawChatPanel(); };
+  const input = document.getElementById('chat-msg-input');
+  const send = async ()=>{
+    const text = input.value.trim();
+    if(!text) return;
+    input.value='';
+    await sendChatMessageTo(state.currentUser.id, state.currentUser.name, partner.id, partner.name, text);
+    await refreshChatThreadMessages();
+    refreshChatBadge();
+  };
+  document.getElementById('chat-send-btn').onclick = send;
+  input.addEventListener('keydown', e=>{ if(e.key==='Enter') send(); });
+}
+async function refreshChatThreadMessages(){
+  const body = document.getElementById('chat-thread-body');
+  if(!body) return;
+  const user = state.currentUser;
+  const partnerId = _chatState.activePartnerId;
+  const messages = await loadChatThread(user.id, partnerId);
+  const wasNearBottom = (body.scrollHeight - body.scrollTop - body.clientHeight) < 60;
+  body.innerHTML = messages.length ? messages.map(m=>`
+    <div class="chat-bubble-row ${m.senderId===user.id?'mine':''}">
+      <div class="chat-bubble">${escapeHtml(m.text)}<span class="chat-bubble-time">${chatTimeLabel(m.at)}</span></div>
+    </div>`).join('') : `<div class="empty-state" style="padding:20px;">${t('chatNoMessagesYet')}</div>`;
+  if(wasNearBottom) body.scrollTop = body.scrollHeight;
+  await markChatThreadRead(user.id, partnerId);
+  refreshChatBadge();
+}
+function chatTimeLabel(iso){
+  try{
+    const d = new Date(iso);
+    return d.toLocaleString(state.lang==='en'?'en-US':'ar-EG', {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit'});
+  }catch(e){ return ''; }
+}
+function escapeHtml(s){
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+// ---- Admin/GM oversight: read-only view of every conversation company-wide ----
+async function renderChatAdminList(panel, hasFullAccess){
+  panel.innerHTML = `
+    <div class="chat-header"><span class="chat-header-title">${t('chatTitle')}</span><button id="chat-close">✕</button></div>
+    ${chatTabsHTML(hasFullAccess, 'admin-list')}
+    <div class="chat-contact-list" id="chat-admin-list"><div class="empty-state" style="padding:20px;">${t('loading')}</div></div>
+  `;
+  document.getElementById('chat-close').onclick = toggleChatPanel;
+  wireChatTabs(hasFullAccess);
+  const conversations = await loadAllChatConversations();
+  const empById = {}; state.employees.forEach(e=>empById[e.id]=e);
+  conversations.sort((a,b)=>{
+    const at = a.messages[a.messages.length-1].at, bt = b.messages[b.messages.length-1].at;
+    return bt.localeCompare(at);
+  });
+  const listEl = document.getElementById('chat-admin-list');
+  listEl.innerHTML = conversations.map(c=>{
+    const names = c.participantIds.map(id=> (empById[id]?empById[id].name:id) );
+    const last = c.messages[c.messages.length-1];
+    return `
+      <div class="chat-contact" data-key="${c.key}">
+        <div class="chat-avatar">👁</div>
+        <div class="chat-contact-info">
+          <div class="chat-contact-name">${names.join(' ↔ ')}</div>
+          <div class="chat-contact-preview">${escapeHtml((last.senderName||'')+': '+last.text)}</div>
+        </div>
+      </div>`;
+  }).join('') || `<div class="empty-state" style="padding:20px;">${t('chatNoConversations')}</div>`;
+  listEl.querySelectorAll('.chat-contact').forEach(el=>{
+    el.onclick = ()=>{ _chatState.mode='admin-thread'; _chatState.adminViewingKey = el.dataset.key; drawChatPanel(); };
+  });
+}
+async function renderChatAdminThread(panel){
+  const key = _chatState.adminViewingKey;
+  const ids = key.slice('chat:'.length).split('__');
+  const empById = {}; state.employees.forEach(e=>empById[e.id]=e);
+  const names = ids.map(id=> (empById[id]?empById[id].name:id) );
+  const messages = await loadJSON(key, true, []);
+  panel.innerHTML = `
+    <div class="chat-header">
+      <button id="chat-back">←</button>
+      <span class="chat-header-title">${names.join(' ↔ ')}</span>
+      <button id="chat-close">✕</button>
+    </div>
+    <div class="chat-thread" id="chat-thread-body">
+      ${messages.map(m=>`
+        <div class="chat-bubble-row ${m.senderId===ids[0]?'mine':''}">
+          <div class="chat-bubble">${escapeHtml(m.senderName)}: ${escapeHtml(m.text)}<span class="chat-bubble-time">${chatTimeLabel(m.at)}</span></div>
+        </div>`).join('') || `<div class="empty-state" style="padding:20px;">${t('chatNoMessagesYet')}</div>`}
+    </div>
+    <div class="chat-viewonly-note">${t('chatViewOnlyNote')}</div>
+  `;
+  document.getElementById('chat-close').onclick = toggleChatPanel;
+  document.getElementById('chat-back').onclick = ()=>{ _chatState.mode='admin-list'; _chatState.adminViewingKey=null; drawChatPanel(); };
+  const body = document.getElementById('chat-thread-body');
+  body.scrollTop = body.scrollHeight;
 }
 
 /* ============================= INIT ============================= */
